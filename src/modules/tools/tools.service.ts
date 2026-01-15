@@ -76,92 +76,166 @@ export class ToolsService {
 
     private cleanPhoneNoise(input: string): string {
         return input
-            .replace(/[^\d,;/\-\(\)]/gi, '')
+            .replace(/[^\d+,;/\-\(\)]/gi, '') // ✅ GIỮ DẤU +
             .replace(/\s+/g, '');
     }
+
+    private isForeignPhone(raw: string): boolean {
+        const s = raw.replace(/\s+/g, '');
+
+        // +84 là VIỆT NAM → KHÔNG phải foreign
+        if (s.startsWith('+84')) return false;
+
+        // +xx khác → foreign
+        if (s.startsWith('+')) return true;
+
+        // 82-, 886- ... → foreign
+        if (/^\d{2,3}-/.test(s) && !s.startsWith('84')) return true;
+
+        return false;
+    }
+
+
 
     normalizeSinglePhone(input: string): string | null {
         if (!input) return null;
 
-        let num = input.trim().replace(/[\s\-\.\(\)]/g, '');
+        let num = input.trim().replace(/[^\d+]/g, '');
         if (!num) return null;
+
+        // ❌ rác ngắn
         if (/^\d{1,8}$/.test(num)) return null;
-        if (/^\d{9}$/.test(num) && !/^[35789]\d{8}$/.test(num)) {
-            return null;
+
+        // ✅ 10 số bắt đầu bằng 1 → coi là VN thiếu 0
+        if (/^1\d{9}$/.test(num)) {
+            num = '0' + num;
         }
+
+        // 9 số mobile VN
         if (/^[35789]\d{8}$/.test(num)) {
             num = '0' + num;
         }
+
+        // +84
         if (num.startsWith('+')) {
             if (num.startsWith('+84')) {
-                let vn = '0' + num.slice(3);
-                if (vn.length === 11) {
-                    const p4 = vn.slice(0, 4);
-                    const p3 = vn.slice(0, 3);
-                    if (PREFIX_MAP[p4]) vn = PREFIX_MAP[p4] + vn.slice(4);
-                    else if (PREFIX_MAP[p3]) vn = PREFIX_MAP[p3] + vn.slice(3);
+                let digits = '0' + num.slice(3).replace(/\D/g, '');
+
+                if (digits.length === 11) {
+                    const p4 = digits.slice(0, 4);
+                    const p3 = digits.slice(0, 3);
+
+                    if (PREFIX_MAP[p4]) digits = PREFIX_MAP[p4] + digits.slice(4);
+                    else if (PREFIX_MAP[p3]) digits = PREFIX_MAP[p3] + digits.slice(3);
                 }
-                return vn.length === 10 ? vn : null;
-            } else {
-                return num.slice(1);
+
+                return digits.length === 10 ? digits : null;
             }
+            return null; // foreign
         }
+
+        // bắt đầu bằng 0
         if (num.startsWith('0')) {
             let digits = num.replace(/\D/g, '');
-            if (digits.length === 10) {
-                const p4 = digits.slice(0, 4);
-                const p3 = digits.slice(0, 3);
-                if (PREFIX_MAP[p4]) digits = PREFIX_MAP[p4] + digits.slice(4);
-                else if (PREFIX_MAP[p3]) digits = PREFIX_MAP[p3] + digits.slice(3);
-            }
+
             if (digits.length === 11) {
                 const p4 = digits.slice(0, 4);
                 const p3 = digits.slice(0, 3);
 
-                if (PREFIX_MAP[p4]) {
-                    digits = PREFIX_MAP[p4] + digits.slice(4);
-                } else if (PREFIX_MAP[p3]) {
-                    digits = PREFIX_MAP[p3] + digits.slice(3);
-                } else {
-                    return null;
-                }
+                if (PREFIX_MAP[p4]) digits = PREFIX_MAP[p4] + digits.slice(4);
+                else if (PREFIX_MAP[p3]) digits = PREFIX_MAP[p3] + digits.slice(3);
+                else return null;
             }
 
             return digits.length === 10 ? digits : null;
         }
-        return num;
+
+        return null;
+    }
+
+
+    private extractPhonesSmart(raw: string): string[] {
+        const digits = raw.replace(/\D/g, '');
+        const mobiles: string[] = [];
+
+        let i = 0;
+        while (i < digits.length) {
+            // 11 số đời cũ 01xx
+            if (digits[i] === '0' && digits[i + 1] === '1') {
+                const chunk11 = digits.slice(i, i + 11);
+                const n = this.normalizeSinglePhone(chunk11);
+                if (n) {
+                    mobiles.push(n);
+                    i += 11;
+                    continue;
+                }
+            }
+
+            // 10 số di động
+            if (digits[i] === '0') {
+                const chunk10 = digits.slice(i, i + 10);
+                const n = this.normalizeSinglePhone(chunk10);
+                if (n) {
+                    mobiles.push(n);
+                    i += 10;
+                    continue;
+                }
+            }
+
+            // số bàn / nội hạt → bỏ
+            i++;
+        }
+
+        // 🔒 CHỐT NGHIỆP VỤ:
+        // nếu chỉ có 1 số di động → trả đúng số đó
+        if (mobiles.length === 1) {
+            return mobiles;
+        }
+
+        // nếu >1 → coi là nhiều di động thật
+        return [...new Set(mobiles)];
     }
 
     normalizePhoneEdit(cell: any): string {
         let raw = this.getCellText(cell);
         if (!raw) return '';
-        raw = this.cleanPhoneNoise(raw);
-        if (/^0\d{9}-0\d{9}$/.test(raw)) {
-            return raw;
+        if (this.isForeignPhone(raw)) {
+            return raw.trim();
         }
-        const tokens: string[] = [];
-        raw.replace(/\(([^)]+)\)/g, (_, p1) => {
-            tokens.push(p1);
-            return '';
-        });
-        raw.replace(/\([^)]+\)/g, '').split(/[,;/\-\|]/).forEach(t => tokens.push(t));
+        // 1️⃣ GIỮ NGUYÊN newline để tách
+        const lines = raw
+            .split(/\r?\n/)        // 👈 TÁCH THEO DÒNG TRƯỚC
+            .map(l => l.trim())
+            .filter(Boolean);
+
         const result: string[] = [];
-        for (const part of tokens) {
-            const p = part.trim();
-            if (!p) continue;
-            const longParts = this.splitLongDigits(p);
-            if (longParts.length) {
-                for (const lp of longParts) {
-                    const n = this.normalizeSinglePhone(lp);
-                    if (n) result.push(n);
+
+        for (const line of lines) {
+            // 2️⃣ SAU KHI TÁCH DÒNG → mới clean
+            const cleaned = this.cleanPhoneNoise(line);
+
+            // 3️⃣ tách tiếp theo delimiter
+            const parts = cleaned.split(/[,;/\-|]/);
+
+            for (const p of parts) {
+                const phone = this.normalizeSinglePhone(p);
+                if (phone) {
+                    result.push(phone);
+                    continue;
                 }
-                continue;
+
+                // 4️⃣ fallback cho chuỗi dính liền thật
+                if (p.replace(/\D/g, '').length >= 10) {
+                    const many = this.extractPhonesSmart(p);
+                    result.push(...many);
+                }
             }
-            const n = this.normalizeSinglePhone(p);
-            if (n) result.push(n);
         }
-        return result.join('-');
+
+        return [...new Set(result)].join('-');
     }
+
+
 
     extractPhonesVN(cell: any, set: Set<string>): string[] {
         const raw = this.getCellText(cell);
@@ -200,26 +274,18 @@ export class ToolsService {
         phoneSheet.addRow(['PHONE']);
         const vnSet = new Set<string>();
         const phoneList: string[] = [];
-
         sheet.eachRow((row, i) => {
             if (i === 1) return;
-
             const cell = row.getCell(phoneCol!).value;
             const edited = this.normalizePhoneEdit(cell);
-
             row.getCell(editCol).value = edited;
-
-            edited
-                .split(/[-,;/|]/)
-                .map(p => p.trim())
-                .filter(p => /^\d{10}$/.test(p))
-                .forEach(p => {
-                    if (!vnSet.has(p)) {
-                        vnSet.add(p);
-                        phoneSheet.addRow([p]);
-                        phoneList.push(p);
-                    }
-                });
+            edited.split(/[-,;/|]/).map(p => p.trim()).filter(p => /^\d{10}$/.test(p)).forEach(p => {
+                if (!vnSet.has(p)) {
+                    vnSet.add(p);
+                    phoneSheet.addRow([p]);
+                    phoneList.push(p);
+                }
+            });
         });
 
         return {
@@ -232,29 +298,19 @@ export class ToolsService {
         if (!files || files.length === 0) {
             throw new BadRequestException('Không có file nào được upload');
         }
-
         const zip = new JSZip();
-
         for (const file of files) {
             if (!file.buffer) continue;
-
-            // 👉 xử lý file gốc
             const { buffer, phones } = await this.processExcel(file.buffer);
-
-            // 👉 file _PHONE
             const phoneName = file.originalname.replace(/\.xlsx?$/i, '_PHONE.xlsx');
             zip.file(phoneName, buffer);
-
-            // 👉 file _AKABIZ (file RIÊNG)
             const akabizBuffer = await this.buildAkabizExcel(phones);
             const akabizName = file.originalname.replace(
                 /\.xlsx?$/i,
                 '_AKABIZ.xlsx',
             );
-
             zip.file(akabizName, akabizBuffer);
         }
-
         return await zip.generateAsync({ type: 'nodebuffer' });
     }
 
@@ -262,36 +318,12 @@ export class ToolsService {
     private async buildAkabizExcel(phones: string[]): Promise<Buffer> {
         const workbook = new ExcelJS.Workbook();
         const sheet = workbook.addWorksheet('Sheet1');
-
-        const headers = [
-            'Fullname',
-            'Uid',
-            'Mobile',
-            'Email',
-            'Info1',
-            'Info2',
-            'Info3',
-            'Info4',
-            'Info5',
-        ];
-
+        const headers = ['Fullname', 'Uid', 'Mobile', 'Email', 'Info1', 'Info2', 'Info3', 'Info4', 'Info5',];
         sheet.addRow(headers);
         sheet.getColumn(3).numFmt = '@';
-
         for (const phone of phones) {
-            sheet.addRow([
-                '',
-                '',
-                phone,
-                '',
-                '',
-                '',
-                '',
-                '',
-                '',
-            ]);
+            sheet.addRow(['', '', phone, '', '', '', '', '', '']);
         }
-
         return Buffer.from(await workbook.xlsx.writeBuffer());
     }
 
