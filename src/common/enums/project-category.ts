@@ -1,0 +1,17 @@
+export enum ProjectCategory {
+    BDS = 'BDS',
+    GUI_TIET_KIEM = 'GUI_TIET_KIEM',
+    XE_HOI = 'XE_HOI',
+    CHUNG_KHOAN = 'CHUNG_KHOAN',
+    VANG = 'VANG',
+    TRUONG_QUOC_TE = 'TRUONG_QUOC_TE',
+    BAC_SI = 'BAC_SI',
+    QUAN_CHUC = 'QUAN_CHUC',
+    DINH_CU = 'DINH_CU',
+    TMĐT = 'TMĐT',
+    CEO = 'CEO',
+    BAO_HIEM = 'BAO_HIEM',
+    GOLF = 'GOLF',
+    KS_5_SAO = 'KS_5_SAO',
+    HIEP_HOI = 'HIEP_HOI',
+}
