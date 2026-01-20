@@ -38,24 +38,3 @@ export class Project {
     details: ProjectDetail[];
 }
 
-
-const data = [
-    {
-        investor: 'VINHOME',
-        quantity: 10,
-        list: [
-            {
-                project_name: 'project_name',
-                quantity: 3
-            },
-            {
-                project_name: 'project_name',
-                quantity: 3
-            },
-            {
-                project_name: 'project_name',
-                quantity: 3
-            }
-        ]
-    }
-]

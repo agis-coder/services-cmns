@@ -15,6 +15,11 @@ export class ZaloController {
             properties: {
                 tenZalo: { type: 'string', example: 'Zalo Marketing' },
                 sdtDangKy: { type: 'string', example: '0987654321' },
+                password: {
+                    type: 'string',
+                    example: '12345678',
+                    nullable: true,
+                },
                 trangThai: {
                     type: 'string',
                     enum: ['ACTIVE', 'LOCK', 'DIE'],
@@ -26,13 +31,19 @@ export class ZaloController {
                     example: false,
                     description: 'Acc có đang bị khóa hay không',
                 },
+                chanNhanTinNguoiLa: {
+                    type: 'boolean',
+                    example: false,
+                    description: 'Có bị chặn nhắn tin người lạ hay không',
+                },
             },
-            required: ['tenZalo', 'sdtDangKy'],
+            required: ['tenZalo', 'sdtDangKy', 'password'],
         },
     })
     create(@Param('deviceId') deviceId: number, @Body() body: any) {
         return this.service.create(+deviceId, body);
     }
+
 
     @Get()
     @ApiOperation({ summary: 'Danh sách tất cả Zalo' })
@@ -47,7 +58,7 @@ export class ZaloController {
     }
 
     @Put(':id')
-    @ApiOperation({ summary: 'Cập nhật Zalo (bao gồm trạng thái khóa)' })
+    @ApiOperation({ summary: 'Cập nhật Zalo (bao gồm trạng thái khóa & chặn nhắn người lạ)' })
     @ApiBody({
         schema: {
             type: 'object',
@@ -64,12 +75,18 @@ export class ZaloController {
                     example: true,
                     description: 'true = đang bị khóa',
                 },
+                chanNhanTinNguoiLa: {
+                    type: 'boolean',
+                    example: true,
+                    description: 'true = bị chặn nhắn tin người lạ',
+                },
             },
         },
     })
     update(@Param('id') id: number, @Body() body: any) {
         return this.service.update(+id, body);
     }
+
 
     @Delete(':id')
     @ApiOperation({ summary: 'Xoá tài khoản Zalo' })

@@ -71,20 +71,15 @@ export class ProjectService {
     }
 
     async getInvestorsByCategory(category: ProjectCategory) {
-        console.log('category:', category)
         const rows = await this.dataSource
             .createQueryBuilder()
             .from('projects', 'p')
-            .leftJoin(
-                'project_details',
-                'd',
-                'd.project_id = p.id'
-            )
+            .leftJoin('project_details', 'd', 'd.project_id = p.id')
             .select([
                 'p.investor AS investor',
                 'p.id AS project_id',
                 'p.project_name AS project_name',
-                'COUNT(d.id) AS quantity',
+                'COUNT(d.id) AS customer_quantity',
             ])
             .where('p.project_category = :category', { category })
             .andWhere('p.investor IS NOT NULL')
@@ -92,31 +87,32 @@ export class ProjectService {
             .addGroupBy('p.id')
             .getRawMany();
 
-
         const result = new Map<string, any>();
 
         for (const row of rows) {
-            const projectQty = Number(row.quantity);
-
             if (!result.has(row.investor)) {
                 result.set(row.investor, {
                     investor: row.investor,
-                    quantity: 0,
+                    quantity: 0,          // số dự án
+                    totalCustomers: 0,    // ✅ tổng khách
                     list: [],
                 });
             }
 
             const investorItem = result.get(row.investor);
+            const customerQty = Number(row.customer_quantity);
 
             investorItem.list.push({
                 project_id: row.project_id,
                 project_name: row.project_name,
-                quantity: projectQty,
+                quantity: customerQty,
             });
 
-            investorItem.quantity += projectQty;
+            investorItem.quantity += 1;
+            investorItem.totalCustomers += customerQty;
         }
 
         return Array.from(result.values());
     }
+
 }

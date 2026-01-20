@@ -1,5 +1,5 @@
 export const HEADER_MAP = {
-    project_name: ['TÊN DỰ ÁN'],
+    project_name: ['TÊN DỰ ÁN', 'Project'],
     product_type: ['LOẠI SẢN PHẨM'],
     subdivision: ['PHÂN KHU'],
     unit_code: ['MÃ CĂN', 'CĂN SỐ'],
@@ -10,10 +10,10 @@ export const HEADER_MAP = {
     view: ['VIEW'],
     contract_price: ['GIÁ GỐC TRÊN HỢP ĐỒNG'],
     day_trading: ['GIAO DỊCH NGÀY'],
-    soucre: ['NGUỒN TỪ ĐÂU'],
+    soucre: ['NGUỒN TỪ ĐÂU', 'soucre'],
     source_details: ['CHI TIẾT NGUỒN'],
 
-    customer_name: ['HỌ VÀ TÊN KHÁCH HÀNG'],
+    customer_name: ['HỌ VÀ TÊN KHÁCH HÀNG', 'Tên'],
     date_of_birth: ['NGÀY THÁNG NĂM SINH'],
     phone_number: ['PHONE', 'SĐT', 'SỐ ĐIỆN THOẠI'],
     cccd: ['CCCD'],

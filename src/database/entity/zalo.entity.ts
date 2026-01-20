@@ -41,6 +41,9 @@ export class ZaloEntity {
     @Column({ default: false })
     biKhoa: boolean;
 
+    @Column({ default: false })
+    chanNhanTinNguoiLa: boolean;
+
     @ManyToOne(() => DeviceEntity, (device) => device.zalos, {
         onDelete: 'CASCADE',
     })

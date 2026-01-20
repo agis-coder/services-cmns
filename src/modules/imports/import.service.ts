@@ -19,13 +19,28 @@ function requireHeader(
     headers: string | string[],
     rowIndex: number,
 ) {
-    const value = getValueStrict(row, headers as any);
+    let value: any;
+
+    if (Array.isArray(headers)) {
+        for (const h of headers) {
+            const v = getValueStrict(row, [h]); // 👈 FIX Ở ĐÂY
+            if (v !== undefined && v !== null && v.toString().trim() !== '') {
+                value = v;
+                break;
+            }
+        }
+    } else {
+        value = getValueStrict(row, [headers]); // 👈 VÀ Ở ĐÂY
+    }
+
     if (value === undefined || value === null || value.toString().trim() === '') {
         const name = Array.isArray(headers) ? headers.join(' / ') : headers;
         throw new BadRequestException(`Row ${rowIndex}: thiếu header "${name}"`);
     }
+
     return value;
 }
+
 
 /** Chuyển giá tiền về number */
 function parseMoney(value: any): number {
@@ -34,6 +49,24 @@ function parseMoney(value: any): number {
     const str = String(value).replace(/[^\d]/g, '');
     return Number(str) || 0;
 }
+function getPhoneAlways(
+    row: Record<string, any>,
+    headers: string[],
+) {
+    const raw = getValueStrict(row, headers);
+
+    if (raw === undefined || raw === null) {
+        return null; // cho phép null
+    }
+
+    const phone = String(raw)
+        .normalize('NFC')
+        .replace(/\u00A0/g, ' ')
+        .trim();
+
+    return phone || null;
+}
+
 
 @Injectable()
 export class ImportService {
@@ -69,24 +102,36 @@ export class ImportService {
                 const rowIndex = i + 2;
 
                 const projectName = requireHeader(row, HEADER_MAP.project_name, rowIndex);
-                const phone = requireHeader(row, HEADER_MAP.phone_number, rowIndex);
+                const phone = getPhoneAlways(
+                    row,
+                    HEADER_MAP.phone_number,
+                );
+
                 const unitCode = requireHeader(row, HEADER_MAP.unit_code, rowIndex);
                 const source = requireHeader(row, HEADER_MAP.soucre, rowIndex);
-                const contractPriceRaw = requireHeader(row, HEADER_MAP.contract_price, rowIndex);
                 const productType = requireHeader(row, HEADER_MAP.product_type, rowIndex);
                 const customerName = requireHeader(row, HEADER_MAP.customer_name, rowIndex);
 
-                const contractPrice = parseMoney(contractPriceRaw);
-                if (contractPrice <= 0) {
+                // contract_price: KHÔNG bắt buộc
+                const contractPriceRaw =
+                    row[HEADER_MAP.contract_price as unknown as string];
+                const contractPrice = contractPriceRaw
+                    ? parseMoney(contractPriceRaw)
+                    : 0;
+
+                if (contractPrice < 0) {
                     throw new BadRequestException(
                         `Row ${rowIndex}: contract_price (giá gốc hợp đồng) không hợp lệ`
                     );
                 }
 
+
                 const sourceDetail = getValueStrict(row, HEADER_MAP.source_details) || 'BDS';
                 const projectCategory: ProjectCategory = Object.values(ProjectCategory).includes(sourceDetail as ProjectCategory)
                     ? (sourceDetail as ProjectCategory)
                     : ProjectCategory.BDS;
+
+
 
                 // Find or create Project
                 let project = await qr.manager.findOne(Project, { where: { project_name: projectName } });
@@ -127,6 +172,7 @@ export class ImportService {
                 }
 
                 // Find or create Customer
+                console.log('phone', phone)
                 let customer = await qr.manager.findOne(Customer, { where: { phone_number: phone } });
                 if (!customer) {
                     customer = await qr.manager.save(

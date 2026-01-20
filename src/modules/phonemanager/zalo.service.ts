@@ -22,8 +22,10 @@ export class ZaloService {
             tenZalo: body.tenZalo,
             sdtDangKy: body.sdtDangKy,
             trangThai: body.trangThai,
+            password: body.password ?? null, // ✅ cho phép rỗng
             chayAkaabiz: body.chayAkaabiz ?? false,
             biKhoa: body.biKhoa ?? false,
+            chanNhanTinNguoiLa: body.chanNhanTinNguoiLa ?? false,
             device,
         });
 
@@ -52,6 +54,8 @@ export class ZaloService {
             trangThai: body.trangThai ?? zalo.trangThai,
             chayAkaabiz: body.chayAkaabiz ?? zalo.chayAkaabiz,
             biKhoa: body.biKhoa ?? zalo.biKhoa,
+            chanNhanTinNguoiLa:
+                body.chanNhanTinNguoiLa ?? zalo.chanNhanTinNguoiLa, // ✅ FIX
         });
 
         return this.repo.save(zalo);

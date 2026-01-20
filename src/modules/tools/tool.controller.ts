@@ -25,24 +25,38 @@ export class ToolsController {
         @UploadedFile() file: Express.Multer.File,
         @Res() res: Response,
     ) {
-        if (!file) {
+        if (!file?.buffer) {
             return res.status(400).json({ message: 'Thiếu file upload' });
         }
 
+        // 1️⃣ xử lý file chính
         const { buffer, phones } =
             await this.toolsService.processExcel(file.buffer);
 
-        res.setHeader(
-            'Content-Type',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        );
+        // 2️⃣ build akabiz
+        const akabizBuffer =
+            await this.toolsService['buildAkabizExcel'](phones);
+
+        // 3️⃣ zip 2 file lại
+        const zip = new (require('jszip'))();
+
+        const baseName = file.originalname.replace(/\.xlsx?$/i, '');
+
+        zip.file(`${baseName}_PHONE.xlsx`, buffer);
+        zip.file(`${baseName}_AKABIZ.xlsx`, akabizBuffer);
+
+        const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+
+        // 4️⃣ trả zip
+        res.setHeader('Content-Type', 'application/zip');
         res.setHeader(
             'Content-Disposition',
-            'attachment; filename="dulieu_clean_oneline.xlsx"',
+            'attachment; filename="convert_phone_result.zip"',
         );
 
-        return res.send(buffer);
+        return res.send(zipBuffer);
     }
+
 
     @ApiTags('Tools')
     @Post('excel/multi')

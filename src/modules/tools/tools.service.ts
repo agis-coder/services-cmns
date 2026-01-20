@@ -160,7 +160,6 @@ export class ToolsService {
 
         let i = 0;
         while (i < digits.length) {
-            // 11 số đời cũ 01xx
             if (digits[i] === '0' && digits[i + 1] === '1') {
                 const chunk11 = digits.slice(i, i + 11);
                 const n = this.normalizeSinglePhone(chunk11);
@@ -236,6 +235,26 @@ export class ToolsService {
     }
 
 
+    async processSingleExcelWithAkabiz(
+        file: Express.Multer.File,
+    ): Promise<Buffer> {
+        if (!file?.buffer) {
+            throw new BadRequestException('File không hợp lệ');
+        }
+
+        const zip = new JSZip();
+
+        const { buffer, phones } = await this.processExcel(file.buffer);
+
+        const phoneName = file.originalname.replace(/\.xlsx?$/i, '_PHONE.xlsx');
+        zip.file(phoneName, buffer);
+
+        const akabizBuffer = await this.buildAkabizExcel(phones);
+        const akabizName = file.originalname.replace(/\.xlsx?$/i, '_AKABIZ.xlsx');
+        zip.file(akabizName, akabizBuffer);
+
+        return zip.generateAsync({ type: 'nodebuffer' });
+    }
 
     extractPhonesVN(cell: any, set: Set<string>): string[] {
         const raw = this.getCellText(cell);
