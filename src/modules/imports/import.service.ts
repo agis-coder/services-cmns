@@ -49,24 +49,33 @@ function parseMoney(value: any): number {
     const str = String(value).replace(/[^\d]/g, '');
     return Number(str) || 0;
 }
-function getPhoneAlways(
+function requirePhone(
     row: Record<string, any>,
     headers: string[],
+    rowIndex: number,
 ) {
     const raw = getValueStrict(row, headers);
 
     if (raw === undefined || raw === null) {
-        return null; // cho phép null
+        throw new BadRequestException(
+            `Row ${rowIndex}: thiếu giá trị PHONE`
+        );
     }
 
     const phone = String(raw)
         .normalize('NFC')
-        .replace(/\u00A0/g, ' ')
+        .replace(/\u00A0/g, ' ') // NBSP
+        .replace(/\s+/g, '')
         .trim();
 
-    return phone || null;
-}
+    if (!phone) {
+        throw new BadRequestException(
+            `Row ${rowIndex}: PHONE không hợp lệ`
+        );
+    }
 
+    return phone;
+}
 
 @Injectable()
 export class ImportService {
@@ -102,11 +111,11 @@ export class ImportService {
                 const rowIndex = i + 2;
 
                 const projectName = requireHeader(row, HEADER_MAP.project_name, rowIndex);
-                const phone = getPhoneAlways(
+                const phone = requirePhone(
                     row,
                     HEADER_MAP.phone_number,
+                    rowIndex,
                 );
-
                 const unitCode = requireHeader(row, HEADER_MAP.unit_code, rowIndex);
                 const source = requireHeader(row, HEADER_MAP.soucre, rowIndex);
                 const productType = requireHeader(row, HEADER_MAP.product_type, rowIndex);

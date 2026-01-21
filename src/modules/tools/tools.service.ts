@@ -76,7 +76,15 @@ export class ToolsService {
 
     private cleanPhoneNoise(input: string): string {
         return input
-            .replace(/[^\d+,;/\-\(\)]/gi, '') // ✅ GIỮ DẤU +
+            // 🆕 coi newline là delimiter
+            .replace(/[\r\n]+/g, '|')
+
+            // chữ nằm giữa 2 số → chèn delimiter
+            .replace(/(\d)[^\d+,;/\-\(\)|]+(\d)/gi, '$1|$2')
+
+            // giữ ký tự hợp lệ
+            .replace(/[^\d+,;/\-\(\)|]/gi, '')
+
             .replace(/\s+/g, '');
     }
 
@@ -95,28 +103,49 @@ export class ToolsService {
         return false;
     }
 
-
-
     normalizeSinglePhone(input: string): string | null {
         if (!input) return null;
 
         let num = input.trim().replace(/[^\d+]/g, '');
         if (!num) return null;
 
+        // 🆕 84xxxxxxxxx (không có +) → số VN
+        if (/^84\d{9,10}$/.test(num)) {
+            num = '0' + num.slice(2);
+        }
+
+        // ✅ CASE: +0xxxxxxxxx → VN, bỏ +
+        if (/^\+0\d{9}$/.test(num)) {
+            return num.slice(1);
+        }
+
+        // ✅ CASE: +<digits> → bỏ dấu + (KHÔNG coi là foreign ở đây)
+        if (/^\+\d{10,}$/.test(num)) {
+            return num.slice(1);
+        }
+
         // ❌ rác ngắn
         if (/^\d{1,8}$/.test(num)) return null;
 
-        // ✅ 10 số bắt đầu bằng 1 → coi là VN thiếu 0
+        // ❌ 0 + 8 số → bỏ
+        if (/^0\d{8}$/.test(num)) return null;
+
+        // 🆕 0 + 9 số → thiếu 0
+        if (/^0[35789]\d{7}$/.test(num)) {
+            num = '0' + num.slice(1);
+        }
+
+        // 10 số bắt đầu bằng 1
         if (/^1\d{9}$/.test(num)) {
             num = '0' + num;
         }
 
-        // 9 số mobile VN
+        // 9 số mobile
         if (/^[35789]\d{8}$/.test(num)) {
             num = '0' + num;
         }
 
-        // +84
+        // +84 (giữ logic cũ)
         if (num.startsWith('+')) {
             if (num.startsWith('+84')) {
                 let digits = '0' + num.slice(3).replace(/\D/g, '');
@@ -131,7 +160,7 @@ export class ToolsService {
 
                 return digits.length === 10 ? digits : null;
             }
-            return null; // foreign
+            return null; // foreign khác
         }
 
         // bắt đầu bằng 0
@@ -153,11 +182,85 @@ export class ToolsService {
         return null;
     }
 
-
     private extractPhonesSmart(raw: string): string[] {
         const digits = raw.replace(/\D/g, '');
         const mobiles: string[] = [];
+        if (digits.length === 19) {
+            const fixed = '0' + digits; // thành 20
+            const p1 = fixed.slice(0, 10);
+            const p2 = fixed.slice(10, 20);
 
+            const n1 = this.normalizeSinglePhone(p1);
+            const n2 = this.normalizeSinglePhone(p2);
+
+            if (n1) mobiles.push(n1);
+            if (n2) mobiles.push(n2);
+
+            return [...new Set(mobiles)];
+        }
+        const left10 = digits.slice(0, 10);
+        const right10 = digits.slice(10);
+
+        if (left10 === right10) {
+            const one = this.normalizeSinglePhone(left10);
+            return one ? [one] : [];
+        }
+
+        if (digits.length === 20) {
+            const out: string[] = [];
+
+            // 🆕 0️⃣ CASE TRÙNG GƯƠNG: 10 + 10 giống nhau
+            const left10 = digits.slice(0, 10);
+            const right10 = digits.slice(10, 20);
+
+            if (left10 === right10) {
+                const one = this.normalizeSinglePhone(left10);
+                return one ? [one] : [];
+            }
+
+            // 1️⃣ thử 10 – 10 (2 số khác nhau)
+            const n10a = this.normalizeSinglePhone(left10);
+            const n10b = this.normalizeSinglePhone(right10);
+
+            if (n10a || n10b) {
+                if (n10a) out.push(n10a);
+                if (n10b) out.push(n10b);
+                return [...new Set(out)];
+            }
+
+            // 2️⃣ fallback 11 – 9
+            const left11 = digits.slice(0, 11);
+            const right9 = digits.slice(11, 20);
+
+            const n11 = this.normalizeSinglePhone(left11);
+
+            let n9: string | null = null;
+            if (/^[35789]\d{8}$/.test(right9)) {
+                n9 = '0' + right9;
+            }
+
+            if (n11) out.push(n11);
+            if (n9) {
+                const fixed = this.normalizeSinglePhone(n9);
+                if (fixed) out.push(fixed);
+            }
+
+            return [...new Set(out)];
+        }
+
+        if (digits.length === 21) {
+            const fixed = '0' + digits; // 22
+            const p1 = fixed.slice(0, 11);
+            const p2 = fixed.slice(11, 22);
+
+            const n1 = this.normalizeSinglePhone(p1);
+            const n2 = this.normalizeSinglePhone(p2);
+
+            if (n1) mobiles.push(n1);
+            if (n2) mobiles.push(n2);
+
+            return [...new Set(mobiles)];
+        }
         let i = 0;
         while (i < digits.length) {
             if (digits[i] === '0' && digits[i + 1] === '1') {
@@ -198,34 +301,39 @@ export class ToolsService {
     normalizePhoneEdit(cell: any): string {
         let raw = this.getCellText(cell);
         if (!raw) return '';
-        if (this.isForeignPhone(raw)) {
-            return raw.trim();
-        }
-        // 1️⃣ GIỮ NGUYÊN newline để tách
+
         const lines = raw
-            .split(/\r?\n/)        // 👈 TÁCH THEO DÒNG TRƯỚC
+            .split(/\r?\n/)
             .map(l => l.trim())
             .filter(Boolean);
 
         const result: string[] = [];
 
         for (const line of lines) {
-            // 2️⃣ SAU KHI TÁCH DÒNG → mới clean
             const cleaned = this.cleanPhoneNoise(line);
-
-            // 3️⃣ tách tiếp theo delimiter
             const parts = cleaned.split(/[,;/\-|]/);
 
             for (const p of parts) {
-                const phone = this.normalizeSinglePhone(p);
+                const rawPart = p.trim();
+                if (!rawPart) continue;
+
+                // 1️⃣ +<digits> nhưng KHÔNG phải +84 → foreign → bỏ +
+                if (/^\+\d+$/.test(rawPart) && !rawPart.startsWith('+84')) {
+                    result.push(rawPart.slice(1));
+                    continue;
+                }
+
+                // 2️⃣ normalize VN (+84, 0xxx, 9xxx…)
+                const phone = this.normalizeSinglePhone(rawPart);
                 if (phone) {
                     result.push(phone);
                     continue;
                 }
 
-                // 4️⃣ fallback cho chuỗi dính liền thật
-                if (p.replace(/\D/g, '').length >= 10) {
-                    const many = this.extractPhonesSmart(p);
+                // 3️⃣ fallback dính liền
+                const digits = rawPart.replace(/\D/g, '');
+                if (digits.length >= 10) {
+                    const many = this.extractPhonesSmart(rawPart);
                     result.push(...many);
                 }
             }
@@ -233,7 +341,6 @@ export class ToolsService {
 
         return [...new Set(result)].join('-');
     }
-
 
     async processSingleExcelWithAkabiz(
         file: Express.Multer.File,
