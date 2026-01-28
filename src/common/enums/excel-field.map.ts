@@ -12,8 +12,8 @@ export const HEADER_MAP = {
     day_trading: ['GIAO DỊCH NGÀY'],
     soucre: ['NGUỒN TỪ ĐÂU', 'soucre'],
     source_details: ['CHI TIẾT NGUỒN'],
-
-    customer_name: ['HỌ VÀ TÊN KHÁCH HÀNG', 'Tên'],
+    investor: ['Chủ đầu tư', 'investor'],
+    customer_name: ['HỌ VÀ TÊN KHÁCH HÀNG', 'Tên', 'Họ và Tên', 'Full Name'],
     date_of_birth: ['NGÀY THÁNG NĂM SINH'],
     phone_number: ['PHONE', 'SĐT', 'SỐ ĐIỆN THOẠI'],
     cccd: ['CCCD'],

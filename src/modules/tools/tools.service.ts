@@ -73,19 +73,19 @@ export class ToolsService {
 
         return out;
     }
-
     private cleanPhoneNoise(input: string): string {
         return input
-            // 🆕 coi newline là delimiter
+            // 1️⃣ bỏ format hiển thị trước (., space)
+            .replace(/[.\s]+/g, '')
+
+            // 2️⃣ newline là delimiter
             .replace(/[\r\n]+/g, '|')
 
-            // chữ nằm giữa 2 số → chèn delimiter
+            // 3️⃣ chữ nằm giữa 2 số → delimiter
             .replace(/(\d)[^\d+,;/\-\(\)|]+(\d)/gi, '$1|$2')
 
-            // giữ ký tự hợp lệ
-            .replace(/[^\d+,;/\-\(\)|]/gi, '')
-
-            .replace(/\s+/g, '');
+            // 4️⃣ giữ ký tự hợp lệ
+            .replace(/[^\d+,;/\-\(\)|]/gi, '');
     }
 
     private isForeignPhone(raw: string): boolean {
@@ -382,36 +382,68 @@ export class ToolsService {
     async processExcel(fileBuffer: unknown): Promise<{ buffer: Buffer; phones: string[] }> {
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer as any);
+
         const sheet = workbook.worksheets[0];
         if (!sheet) throw new BadRequestException('File Excel trống');
+
         let phoneCol: number | null = null;
+        let editCol: number | null = null;
+
+        // 🔍 tìm PHONE + PHONE EDIT
         sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
             const t = this.getCellText(cell.value).toUpperCase();
-            if (t === 'ĐIỆN THOẠI' || t === 'SỐ ĐIỆN THOẠI' || t === 'SDT' || t === 'SĐT' || t === 'PHONE') {
+            if (
+                t === 'ĐIỆN THOẠI' ||
+                t === 'SỐ ĐIỆN THOẠI' ||
+                t === 'SDT' ||
+                t === 'SĐT' ||
+                t === 'PHONE'
+            ) {
                 phoneCol = col;
             }
+            if (t === 'PHONE EDIT') {
+                editCol = col;
+            }
         });
-        if (!phoneCol) throw new BadRequestException('Không tìm thấy cột ĐIỆN THOẠI');
-        const editCol = phoneCol + 1;
-        sheet.getRow(1).getCell(editCol).value = 'PHONE EDIT';
-        sheet.getColumn(editCol).numFmt = '@';
+
+        if (!phoneCol) {
+            throw new BadRequestException('Không tìm thấy cột ĐIỆN THOẠI');
+        }
+
+        // ➕ nếu chưa có PHONE EDIT → thêm ở CUỐI
+        if (!editCol) {
+            editCol = sheet.columnCount + 1;
+            sheet.getRow(1).getCell(editCol).value = 'PHONE EDIT';
+            sheet.getColumn(editCol).numFmt = '@';
+        }
+
+        // 📄 sheet PHONE
         const phoneSheet = workbook.addWorksheet('PHONE');
         phoneSheet.getColumn(1).numFmt = '@';
         phoneSheet.addRow(['PHONE']);
+
         const vnSet = new Set<string>();
         const phoneList: string[] = [];
+
         sheet.eachRow((row, i) => {
             if (i === 1) return;
+
             const cell = row.getCell(phoneCol!).value;
             const edited = this.normalizePhoneEdit(cell);
-            row.getCell(editCol).value = edited;
-            edited.split(/[-,;/|]/).map(p => p.trim()).filter(p => /^\d{10}$/.test(p)).forEach(p => {
-                if (!vnSet.has(p)) {
-                    vnSet.add(p);
-                    phoneSheet.addRow([p]);
-                    phoneList.push(p);
-                }
-            });
+
+            row.getCell(editCol!).value = edited;
+
+            edited
+                .split(/[-,;/|]/)
+                .map(p => p.trim())
+                .filter(p => /^\d{10}$/.test(p))
+                .forEach(p => {
+                    if (!vnSet.has(p)) {
+                        vnSet.add(p);
+                        phoneSheet.addRow([p]);
+                        phoneList.push(p);
+                    }
+                });
         });
 
         return {
@@ -419,6 +451,7 @@ export class ToolsService {
             phones: phoneList,
         };
     }
+
 
     async processMultipleExcel(files: Express.Multer.File[]): Promise<Buffer> {
         if (!files || files.length === 0) {

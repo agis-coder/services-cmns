@@ -103,135 +103,160 @@ export class ImportService {
 
         try {
             const importFile = await qr.manager.save(
-                qr.manager.create(ImportFile, { file_name: file.originalname })
+                qr.manager.create(ImportFile, { file_name: file.originalname }),
             );
+
+            const customerMap = new Map<string, Customer>();
+            const detailMap = new Map<string, ProjectDetail>();
+
+            const normalize = (v: string) => (v ?? '').trim().toLowerCase();
 
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
                 const rowIndex = i + 2;
 
-                const projectName = requireHeader(row, HEADER_MAP.project_name, rowIndex);
-                const phone = requirePhone(
-                    row,
-                    HEADER_MAP.phone_number,
-                    rowIndex,
-                );
-                const unitCode = requireHeader(row, HEADER_MAP.unit_code, rowIndex);
-                const source = requireHeader(row, HEADER_MAP.soucre, rowIndex);
-                const productType = requireHeader(row, HEADER_MAP.product_type, rowIndex);
                 const customerName = requireHeader(row, HEADER_MAP.customer_name, rowIndex);
+                const phone = requirePhone(row, HEADER_MAP.phone_number, rowIndex);
 
-                // contract_price: KHÔNG bắt buộc
+                // 🔑 phân biệt người theo: SĐT + TÊN
+                const customerKey = `${normalize(phone)}|${normalize(customerName)}`;
+                const source =
+                    getValueStrict(row, HEADER_MAP.soucre) || 'IMPORT';
+                const projectName =
+                    getValueStrict(row, HEADER_MAP.project_name) || 'DỰ ÁN CHƯA PHÂN LOẠI';
+
+                const unitCode =
+                    getValueStrict(row, HEADER_MAP.unit_code) || `AUTO-${rowIndex}`;
+
+                const productType =
+                    getValueStrict(row, HEADER_MAP.product_type) || 'UNKNOWN';
+
                 const contractPriceRaw =
                     row[HEADER_MAP.contract_price as unknown as string];
+
                 const contractPrice = contractPriceRaw
                     ? parseMoney(contractPriceRaw)
                     : 0;
 
                 if (contractPrice < 0) {
                     throw new BadRequestException(
-                        `Row ${rowIndex}: contract_price (giá gốc hợp đồng) không hợp lệ`
+                        `Row ${rowIndex}: contract_price không hợp lệ`,
                     );
                 }
 
+                // ================= PROJECT =================
+                let project = await qr.manager.findOne(Project, {
+                    where: { project_name: projectName },
+                });
 
-                const sourceDetail = getValueStrict(row, HEADER_MAP.source_details) || 'BDS';
-                const projectCategory: ProjectCategory = Object.values(ProjectCategory).includes(sourceDetail as ProjectCategory)
-                    ? (sourceDetail as ProjectCategory)
-                    : ProjectCategory.BDS;
-
-
-
-                // Find or create Project
-                let project = await qr.manager.findOne(Project, { where: { project_name: projectName } });
                 if (!project) {
                     project = await qr.manager.save(
                         qr.manager.create(Project, {
                             project_name: projectName,
-                            project_category: projectCategory,
                             investor: '',
                         }),
                     );
                 }
 
-                // Find or create ProjectDetail
-                let detail = await qr.manager.findOne(ProjectDetail, {
-                    where: { project: { id: project.id }, unit_code: unitCode },
-                    relations: ['project'],
-                });
+                // ================= PROJECT DETAIL =================
+                const detailKey = `${project.id}|${unitCode}`;
+
+                let detail: ProjectDetail | undefined;
 
                 if (!detail) {
-                    detail = await qr.manager.save(
-                        qr.manager.create(ProjectDetail, {
-                            project,
+                    detail = await qr.manager.findOne(ProjectDetail, {
+                        where: {
+                            project: { id: project.id },
                             unit_code: unitCode,
-                            product_type: productType,
-                            subdivision: getValueStrict(row, HEADER_MAP.subdivision) || '',
-                            floor: getValueStrict(row, HEADER_MAP.floor) || '',
-                            land_area: parseMoney(getValueStrict(row, HEADER_MAP.land_area)) || 0,
-                            usable_area: parseMoney(getValueStrict(row, HEADER_MAP.usable_area)) || 0,
-                            door_direction: getValueStrict(row, HEADER_MAP.door_direction) || '',
-                            view: getValueStrict(row, HEADER_MAP.view) || '',
-                            contract_price: contractPrice,
-                            day_trading: getValueStrict(row, HEADER_MAP.day_trading) || null,
-                            source,
-                            source_details: sourceDetail,
-                        }),
-                    );
+                        },
+                    }) ?? undefined;
+
+                    if (!detail) {
+                        detail = await qr.manager.save(
+                            qr.manager.create(ProjectDetail, {
+                                project,
+                                unit_code: unitCode,
+                                product_type: productType,
+                                subdivision: getValueStrict(row, HEADER_MAP.subdivision) || '',
+                                floor: getValueStrict(row, HEADER_MAP.floor) || '',
+                                land_area: parseMoney(getValueStrict(row, HEADER_MAP.land_area)) || 0,
+                                usable_area: parseMoney(getValueStrict(row, HEADER_MAP.usable_area)) || 0,
+                                door_direction: getValueStrict(row, HEADER_MAP.door_direction) || '',
+                                view: getValueStrict(row, HEADER_MAP.view) || '',
+                                contract_price: contractPrice,
+                                source,                    // 🔥 BẮT BUỘC
+                                day_trading: getValueStrict(row, HEADER_MAP.day_trading) || null,
+                            }),
+                        );
+                    }
+
+                    detailMap.set(detailKey, detail);
                 }
 
-                // Find or create Customer
-                console.log('phone', phone)
-                let customer = await qr.manager.findOne(Customer, { where: { phone_number: phone } });
+                // ================= CUSTOMER =================
+                let customer: Customer | undefined;
+
                 if (!customer) {
-                    customer = await qr.manager.save(
-                        qr.manager.create(Customer, {
-                            customer_name: customerName,
+                    customer = await qr.manager.findOne(Customer, {
+                        where: {
                             phone_number: phone,
-                            cccd: getValueStrict(row, HEADER_MAP.cccd),
-                            email: getValueStrict(row, HEADER_MAP.email),
-                            address: getValueStrict(row, HEADER_MAP.address),
-                            permanent_address: getValueStrict(row, HEADER_MAP.permanent_address),
-                            living_area: getValueStrict(row, HEADER_MAP.living_area),
-                            nationality: getValueStrict(row, HEADER_MAP.nationality),
-                            marital_status: getValueStrict(row, HEADER_MAP.marital_status),
-                            interest: getValueStrict(row, HEADER_MAP.interest),
-                            business_field: getValueStrict(row, HEADER_MAP.business_field),
-                            zalo_status: getValueStrict(row, HEADER_MAP.zalo_status),
-                            facebook: getValueStrict(row, HEADER_MAP.facebook),
-                            import_file: importFile,
-                        }),
-                    );
+                            customer_name: customerName,
+                        },
+                    }) ?? undefined;
+
+                    if (!customer) {
+                        customer = await qr.manager.save(
+                            qr.manager.create(Customer, {
+                                customer_name: customerName,
+                                phone_number: phone,
+                                cccd: getValueStrict(row, HEADER_MAP.cccd),
+                                email: getValueStrict(row, HEADER_MAP.email),
+                                address: getValueStrict(row, HEADER_MAP.address),
+                                permanent_address: getValueStrict(row, HEADER_MAP.permanent_address),
+                            }),
+                        );
+                    }
+
+                    customerMap.set(customerKey, customer);
                 }
 
-                // Save ProjectNewSale or ProjectTransfer
+                // ================= NEW SALE / TRANSFER =================
                 if (type === 'new_sale') {
-                    await qr.manager.save(
-                        qr.manager.create(ProjectNewSale, {
-                            project_detail: detail,
-                            customer,
-                            first_interaction_new: excelDateToJSDate(getValueStrict(row, HEADER_MAP.first_interaction_new)),
-                            closest_interaction_new: excelDateToJSDate(getValueStrict(row, HEADER_MAP.closest_interaction_new)),
-                            project_advertised: getValueStrict(row, HEADER_MAP.project_advertised),
-                            result_new: getValueStrict(row, HEADER_MAP.result_new),
-                            note_expected_new: getValueStrict(row, HEADER_MAP.note_expected_new),
-                            import_file: importFile,
-                        }),
-                    );
+                    const existed = await qr.manager.findOne(ProjectNewSale, {
+                        where: {
+                            project_detail: { id: detail.id },
+                            customer: { id: customer.id },
+                            import_file: { id: importFile.id },
+                        },
+                    });
+
+                    if (!existed) {
+                        await qr.manager.save(
+                            qr.manager.create(ProjectNewSale, {
+                                project_detail: detail,
+                                customer,
+                                import_file: importFile,
+                            }),
+                        );
+                    }
                 } else {
-                    await qr.manager.save(
-                        qr.manager.create(ProjectTransfer, {
-                            project_detail: detail,
-                            customer,
-                            first_interaction_transfer: excelDateToJSDate(getValueStrict(row, HEADER_MAP.first_interaction_transfer)),
-                            closest_interaction_transfer: excelDateToJSDate(getValueStrict(row, HEADER_MAP.closest_interaction_transfer)),
-                            result_transfer: getValueStrict(row, HEADER_MAP.result_transfer),
-                            expected_selling_price_transfer: parseMoney(getValueStrict(row, HEADER_MAP.expected_selling_price_transfer)),
-                            expected_rental_price_transfer: parseMoney(getValueStrict(row, HEADER_MAP.expected_rental_price_transfer)),
-                            note_expected_transfer: getValueStrict(row, HEADER_MAP.note_expected_transfer),
-                            import_file: importFile,
-                        }),
-                    );
+                    const existed = await qr.manager.findOne(ProjectTransfer, {
+                        where: {
+                            project_detail: { id: detail.id },
+                            customer: { id: customer.id },
+                            import_file: { id: importFile.id },
+                        },
+                    });
+
+                    if (!existed) {
+                        await qr.manager.save(
+                            qr.manager.create(ProjectTransfer, {
+                                project_detail: detail,
+                                customer,
+                                import_file: importFile,
+                            }),
+                        );
+                    }
                 }
             }
 
@@ -245,8 +270,94 @@ export class ImportService {
         }
     }
 
+
+
     async deleteImportFile(id: string) {
-        await this.dataSource.getRepository(ImportFile).delete(id);
-        return { message: 'Đã xóa toàn bộ dữ liệu của file import' };
+        const qr = this.dataSource.createQueryRunner();
+        await qr.connect();
+        await qr.startTransaction();
+
+        try {
+            const projectDetailTable =
+                this.dataSource.getMetadata(ProjectDetail).tableName;
+
+            const newSaleTable =
+                this.dataSource.getMetadata(ProjectNewSale).tableName;
+
+            const transferTable =
+                this.dataSource.getMetadata(ProjectTransfer).tableName;
+
+            const customerTable =
+                this.dataSource.getMetadata(Customer).tableName;
+
+            const importFileTable =
+                this.dataSource.getMetadata(ImportFile).tableName;
+
+            const detailRows = await qr.query(
+                `
+            SELECT DISTINCT pd.id
+            FROM ${projectDetailTable} pd
+            LEFT JOIN ${newSaleTable} ns
+                ON ns.project_detail_id = pd.id
+            LEFT JOIN ${transferTable} tf
+                ON tf.project_detail_id = pd.id
+            WHERE ns.importFileId = ?
+               OR tf.importFileId = ?
+            `,
+                [id, id],
+            );
+
+            const projectDetailIds = detailRows.map((r: any) => r.id);
+
+            await qr.query(
+                `
+            DELETE FROM ${newSaleTable}
+            WHERE importFileId = ?
+            `,
+                [id],
+            );
+
+            await qr.query(
+                `
+            DELETE FROM ${transferTable}
+            WHERE importFileId = ?
+            `,
+                [id],
+            );
+
+            await qr.query(
+                `
+            DELETE FROM ${customerTable}
+            WHERE importFileId = ?
+            `,
+                [id],
+            );
+
+            if (projectDetailIds.length > 0) {
+                await qr.manager.delete(ProjectDetail, projectDetailIds);
+            }
+
+            await qr.query(
+                `
+            DELETE FROM ${importFileTable}
+            WHERE id = ?
+            `,
+                [id],
+            );
+
+            await qr.commitTransaction();
+            return {
+                message:
+                    'Đã xóa toàn bộ dữ liệu của file import (customer, new sale, transfer, project detail)',
+            };
+        } catch (e) {
+            await qr.rollbackTransaction();
+            throw e;
+        } finally {
+            await qr.release();
+        }
     }
+
+
+
 }
