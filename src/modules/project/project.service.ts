@@ -3,6 +3,40 @@ import { Project } from "../../database/entity/project.entity";
 import { DataSource } from "typeorm";
 import { ProjectCategory } from "../../common/enums/project-category";
 
+interface ProjectTemp {
+    project_id: string;
+    project_name: string;
+    customerSet: Set<string>;
+    emailSet: Set<string>;
+    phoneSet: Set<string>;
+}
+
+interface InvestorTemp {
+    investor: string;
+    quantity: number;
+    totalCustomers: number;
+    totalEmails: Set<string>;
+    totalPhones: Set<string>;
+    projectMap: Map<string, ProjectTemp>; // ✅ FIX Ở ĐÂY
+}
+
+interface ProjectSummary {
+    project_id: string;
+    project_name: string;
+    quantity: number;
+    email_quantity: number;
+    phone_quantity: number;
+}
+
+interface InvestorSummary {
+    investor: string;
+    quantity: number;
+    totalCustomers: number;
+    totalEmails: number;
+    totalPhones: number;
+    list: ProjectSummary[];
+}
+
 @Injectable()
 export class ProjectService {
     constructor(private readonly dataSource: DataSource) { }
@@ -70,49 +104,116 @@ export class ProjectService {
         return { message: "Deleted successfully" };
     }
 
-    async getInvestorsByCategory(category: ProjectCategory) {
+    private extractEmails(raw: string): string[] {
+        if (!raw) return [];
+        return raw
+            .toLowerCase()
+            .split(/[\s|,:;-]+/)
+            .filter(v => v.includes('@'))
+            .map(v => v.trim())
+            .filter(v => v.length > 3);
+    }
+
+    private extractPhones(raw: string): string[] {
+        if (!raw) return [];
+        return raw
+            .split(/[\s|,:;-]+/)
+            .map(v => v.replace(/\D/g, ''))
+            .filter(v =>
+                (v.startsWith('0') && v.length >= 9 && v.length <= 11) ||
+                (v.startsWith('84') && v.length >= 11 && v.length <= 13)
+            );
+    }
+
+    async getInvestorsByCategory(
+        category: ProjectCategory,
+    ): Promise<InvestorSummary[]> {
         const rows = await this.dataSource
             .createQueryBuilder()
             .from('projects', 'p')
             .leftJoin('project_details', 'd', 'd.project_id = p.id')
+            .leftJoin('project_new_sales', 'ns', 'ns.project_detail_id = d.id')
+            .leftJoin('customers', 'c', 'c.id = ns.customerId')
             .select([
                 'p.investor AS investor',
                 'p.id AS project_id',
                 'p.project_name AS project_name',
-                'COUNT(d.id) AS customer_quantity',
+                'c.email AS email',
+                'c.phone_number AS phone',
             ])
             .where('p.project_category = :category', { category })
             .andWhere('p.investor IS NOT NULL')
-            .groupBy('p.investor')
-            .addGroupBy('p.id')
             .getRawMany();
 
-        const result = new Map<string, any>();
+        const investorMap = new Map<string, InvestorTemp>();
 
         for (const row of rows) {
-            if (!result.has(row.investor)) {
-                result.set(row.investor, {
+            if (!investorMap.has(row.investor)) {
+                investorMap.set(row.investor, {
                     investor: row.investor,
-                    quantity: 0,          // số dự án
-                    totalCustomers: 0,    // ✅ tổng khách
-                    list: [],
+                    quantity: 0,
+                    totalCustomers: 0,
+                    totalEmails: new Set<string>(),
+                    totalPhones: new Set<string>(),
+                    projectMap: new Map<string, ProjectTemp>(), // ✅ FIX
                 });
             }
 
-            const investorItem = result.get(row.investor);
-            const customerQty = Number(row.customer_quantity);
+            const investorItem = investorMap.get(row.investor)!;
 
-            investorItem.list.push({
-                project_id: row.project_id,
-                project_name: row.project_name,
-                quantity: customerQty,
+            if (!investorItem.projectMap.has(row.project_id)) {
+                investorItem.projectMap.set(row.project_id, {
+                    project_id: row.project_id,
+                    project_name: row.project_name,
+                    customerSet: new Set<string>(),
+                    emailSet: new Set<string>(),
+                    phoneSet: new Set<string>(),
+                });
+                investorItem.quantity += 1;
+            }
+
+            const projectItem = investorItem.projectMap.get(row.project_id)!;
+
+            investorItem.totalCustomers += 1;
+
+            this.extractEmails(row.email).forEach(e => {
+                projectItem.emailSet.add(e);
+                investorItem.totalEmails.add(e);
             });
 
-            investorItem.quantity += 1;
-            investorItem.totalCustomers += customerQty;
+            this.extractPhones(row.phone).forEach(p => {
+                projectItem.phoneSet.add(p);
+                investorItem.totalPhones.add(p);
+            });
         }
 
-        return Array.from(result.values());
+        const result: InvestorSummary[] = [];
+
+        for (const investorItem of investorMap.values()) {
+            const projects: ProjectSummary[] = [];
+
+            for (const projectItem of investorItem.projectMap.values()) {
+                projects.push({
+                    project_id: projectItem.project_id,
+                    project_name: projectItem.project_name,
+                    quantity:
+                        projectItem.emailSet.size + projectItem.phoneSet.size,
+                    email_quantity: projectItem.emailSet.size,
+                    phone_quantity: projectItem.phoneSet.size,
+                });
+            }
+
+            result.push({
+                investor: investorItem.investor,
+                quantity: investorItem.quantity,
+                totalCustomers: investorItem.totalCustomers,
+                totalEmails: investorItem.totalEmails.size,
+                totalPhones: investorItem.totalPhones.size,
+                list: projects,
+            });
+        }
+
+        return result;
     }
 
 }

@@ -53,28 +53,39 @@ function requirePhone(
     row: Record<string, any>,
     headers: string[],
     rowIndex: number,
-) {
+): string {
     const raw = getValueStrict(row, headers);
 
+
     if (raw === undefined || raw === null) {
+
         throw new BadRequestException(
-            `Row ${rowIndex}: thiếu giá trị PHONE`
+            `Row ${rowIndex}: thiếu giá trị PHONE`,
         );
     }
 
-    const phone = String(raw)
+    const cleaned = String(raw)
         .normalize('NFC')
-        .replace(/\u00A0/g, ' ') // NBSP
-        .replace(/\s+/g, '')
+        .replace(/\u00A0/g, ' ')
         .trim();
 
-    if (!phone) {
-        throw new BadRequestException(
-            `Row ${rowIndex}: PHONE không hợp lệ`
-        );
+
+    const phones = cleaned
+        .split(/[-/,;|]/g)
+        .map(p => p.replace(/\D/g, ''))
+        .filter(p => p.length >= 9 && p.length <= 12);
+
+
+
+    if (phones.length === 0) {
+
+        return ''; // hoặc continue ở chỗ gọi
     }
 
-    return phone;
+    const result = phones.join('|');
+
+
+    return result;
 }
 
 @Injectable()
@@ -103,7 +114,9 @@ export class ImportService {
 
         try {
             const importFile = await qr.manager.save(
-                qr.manager.create(ImportFile, { file_name: file.originalname }),
+                qr.manager.create(ImportFile, {
+                    file_name: file.originalname,
+                }),
             );
 
             const customerMap = new Map<string, Customer>();
@@ -115,21 +128,33 @@ export class ImportService {
                 const row = rows[i];
                 const rowIndex = i + 2;
 
-                const customerName = requireHeader(row, HEADER_MAP.customer_name, rowIndex);
-                const phone = requirePhone(row, HEADER_MAP.phone_number, rowIndex);
+                const customerName = requireHeader(
+                    row,
+                    HEADER_MAP.customer_name,
+                    rowIndex,
+                );
 
-                // 🔑 phân biệt người theo: SĐT + TÊN
+                const phone = requirePhone(
+                    row,
+                    HEADER_MAP.phone_number,
+                    rowIndex,
+                );
+
                 const customerKey = `${normalize(phone)}|${normalize(customerName)}`;
-                const source =
-                    getValueStrict(row, HEADER_MAP.soucre) || 'IMPORT';
+
                 const projectName =
-                    getValueStrict(row, HEADER_MAP.project_name) || 'DỰ ÁN CHƯA PHÂN LOẠI';
+                    getValueStrict(row, HEADER_MAP.project_name) ||
+                    'DỰ ÁN CHƯA PHÂN LOẠI';
 
                 const unitCode =
-                    getValueStrict(row, HEADER_MAP.unit_code) || `AUTO-${rowIndex}`;
+                    getValueStrict(row, HEADER_MAP.unit_code) ||
+                    `AUTO-${rowIndex}`;
 
                 const productType =
                     getValueStrict(row, HEADER_MAP.product_type) || 'UNKNOWN';
+
+                const source =
+                    getValueStrict(row, HEADER_MAP.soucre) || 'IMPORT';
 
                 const contractPriceRaw =
                     row[HEADER_MAP.contract_price as unknown as string];
@@ -144,7 +169,6 @@ export class ImportService {
                     );
                 }
 
-                // ================= PROJECT =================
                 let project = await qr.manager.findOne(Project, {
                     where: { project_name: projectName },
                 });
@@ -158,18 +182,17 @@ export class ImportService {
                     );
                 }
 
-                // ================= PROJECT DETAIL =================
                 const detailKey = `${project.id}|${unitCode}`;
-
-                let detail: ProjectDetail | undefined;
+                let detail = detailMap.get(detailKey);
 
                 if (!detail) {
-                    detail = await qr.manager.findOne(ProjectDetail, {
-                        where: {
-                            project: { id: project.id },
-                            unit_code: unitCode,
-                        },
-                    }) ?? undefined;
+                    detail =
+                        (await qr.manager.findOne(ProjectDetail, {
+                            where: {
+                                project: { id: project.id },
+                                unit_code: unitCode,
+                            },
+                        })) ?? undefined;
 
                     if (!detail) {
                         detail = await qr.manager.save(
@@ -184,7 +207,7 @@ export class ImportService {
                                 door_direction: getValueStrict(row, HEADER_MAP.door_direction) || '',
                                 view: getValueStrict(row, HEADER_MAP.view) || '',
                                 contract_price: contractPrice,
-                                source,                    // 🔥 BẮT BUỘC
+                                source,
                                 day_trading: getValueStrict(row, HEADER_MAP.day_trading) || null,
                             }),
                         );
@@ -193,16 +216,16 @@ export class ImportService {
                     detailMap.set(detailKey, detail);
                 }
 
-                // ================= CUSTOMER =================
-                let customer: Customer | undefined;
+                let customer = customerMap.get(customerKey);
 
                 if (!customer) {
-                    customer = await qr.manager.findOne(Customer, {
-                        where: {
-                            phone_number: phone,
-                            customer_name: customerName,
-                        },
-                    }) ?? undefined;
+                    customer =
+                        (await qr.manager.findOne(Customer, {
+                            where: {
+                                phone_number: phone,
+                                customer_name: customerName,
+                            },
+                        })) ?? undefined;
 
                     if (!customer) {
                         customer = await qr.manager.save(
@@ -213,6 +236,7 @@ export class ImportService {
                                 email: getValueStrict(row, HEADER_MAP.email),
                                 address: getValueStrict(row, HEADER_MAP.address),
                                 permanent_address: getValueStrict(row, HEADER_MAP.permanent_address),
+                                import_file: importFile, // 🔥 FIX: gắn importFile cho customer
                             }),
                         );
                     }
@@ -220,7 +244,6 @@ export class ImportService {
                     customerMap.set(customerKey, customer);
                 }
 
-                // ================= NEW SALE / TRANSFER =================
                 if (type === 'new_sale') {
                     const existed = await qr.manager.findOne(ProjectNewSale, {
                         where: {
@@ -269,7 +292,6 @@ export class ImportService {
             await qr.release();
         }
     }
-
 
 
     async deleteImportFile(id: string) {

@@ -46,7 +46,8 @@ export class CustomerService {
         return { message: 'Customer deleted successfully' };
     }
 
-    async findAllWithProjects(page = 1, pageSize = 20, search?: string, sourceDetail?: string, subdivision?: string, customerName?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow') {
+    async findAllWithProjects(page = 1, pageSize = 100, search?: string, sourceDetail?: string, subdivision?: string, customerName?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow', sortByPurchase?: 'most' | 'least'
+    ) {
         const normalizedSearch = normalizeSearch(search || '')
         const qb = this.customerRepo
             .createQueryBuilder('customer')
@@ -82,6 +83,7 @@ export class CustomerService {
         if (birthday === 'tomorrow') {
             qb.andWhere(`customer.date_of_birth IS NOT NULL AND DAY(customer.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY)) AND MONTH(customer.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))`)
         }
+
         qb.orderBy('customer.customer_name', 'ASC').skip((page - 1) * pageSize).take(pageSize)
         const [customers, total] = await qb.getManyAndCount()
         const formatted = customers.map(c => {
@@ -89,6 +91,7 @@ export class CustomerService {
                 ...c.new_sales.map(ns => ({
                     project_name: ns.project_detail.project.project_name,
                     contract_price: ns.project_detail.contract_price,
+                    unit_code: ns.project_detail.unit_code,
                     type: 'new_sale',
                     result: ns.result_new || 'Chưa có',
                     first_interaction: ns.first_interaction_new || 'Chưa có',
@@ -103,6 +106,7 @@ export class CustomerService {
                 ...c.transfers.map(t => ({
                     project_name: t.project_detail.project.project_name,
                     contract_price: t.project_detail.contract_price,
+                    unit_code: t.project_detail.unit_code,
                     type: 'transfer',
                     result: t.result_transfer || 'Chưa có',
                     first_interaction: t.first_interaction_transfer || 'Chưa có',
@@ -121,6 +125,8 @@ export class CustomerService {
                 phone_number: c.phone_number || 'Chưa có',
                 nationality: c.nationality || 'Chưa có',
                 email: c.email || 'Chưa có',
+                level: c.level ?? 0,
+                isVip: !!c.isVip,
                 date_of_birth: c.date_of_birth || 'Chưa có',
                 address: c.address || 'Chưa có',
                 projects: projects.length ? projects : 'Chưa có',
@@ -140,40 +146,60 @@ export class CustomerService {
 
         const relatives = await this.dataSource.query(
             `SELECT r.* 
-                FROM relatives_customer r
-                JOIN customer_relatives cr ON cr.relative_id = r.id
-                WHERE cr.customer_id = ?`,
+         FROM relatives_customer r
+         JOIN customer_relatives cr ON cr.relative_id = r.id
+         WHERE cr.customer_id = ?`,
             [id],
         );
 
-        const newSales = await this.dataSource.query(
-            `SELECT pns.*, pd.source, pd.subdivision, pd.floor, pd.contract_price, p.project_name, pd.source_details
-                FROM project_new_sales pns
-                JOIN project_details pd ON pd.id = pns.project_detail_id
-                JOIN projects p ON p.id = pd.project_id
-                WHERE pns.customerId = ?
-       ${sourceDetail ? 'AND pd.source_details = ?' : ''}`,
+        const newSalesRaw = await this.dataSource.query(
+            `SELECT pns.*, 
+                pd.source, pd.subdivision, pd.floor, pd.unit_code, pd.contract_price,
+                p.project_name, pd.source_details
+         FROM project_new_sales pns
+         JOIN project_details pd ON pd.id = pns.project_detail_id
+         JOIN projects p ON p.id = pd.project_id
+         WHERE pns.customerId = ?
+         ${sourceDetail ? 'AND pd.source_details = ?' : ''}`,
             sourceDetail ? [id, sourceDetail] : [id],
         );
 
-        const transfers = await this.dataSource.query(
-            `SELECT pt.*, pd.source, pd.subdivision, pd.floor, pd.contract_price, p.project_name, pd.source_details
-                FROM project_transfers pt
-                JOIN project_details pd ON pd.id = pt.project_detail_id
-                JOIN projects p ON p.id = pd.project_id
-                WHERE pt.customerId = ?
-        ${sourceDetail ? 'AND pd.source_details = ?' : ''}`,
+        const transfersRaw = await this.dataSource.query(
+            `SELECT pt.*, 
+                pd.source, pd.subdivision, pd.floor, pd.unit_code, pd.contract_price,
+                p.project_name, pd.source_details
+         FROM project_transfers pt
+         JOIN project_details pd ON pd.id = pt.project_detail_id
+         JOIN projects p ON p.id = pd.project_id
+         WHERE pt.customerId = ?
+         ${sourceDetail ? 'AND pd.source_details = ?' : ''}`,
             sourceDetail ? [id, sourceDetail] : [id],
         );
+
+        const dedupeByUnitCode = (rows: any[]) => {
+            const map = new Map<string, any>();
+            for (const r of rows) {
+                if (!r.unit_code) continue;
+                if (!map.has(r.unit_code)) {
+                    map.set(r.unit_code, r);
+                }
+            }
+            return Array.from(map.values());
+        };
+
+        const newSales = dedupeByUnitCode(newSalesRaw ?? []);
+        const transfers = dedupeByUnitCode(transfersRaw ?? []);
+
         return {
             ...customer,
             relatives: relatives ?? [],
             projects: {
-                new_sales: newSales ?? [],
-                transfers: transfers ?? [],
+                new_sales: newSales,
+                transfers: transfers,
             },
         };
     }
+
 
     async getProjectNamesBySource(source: string): Promise<string[]> {
         if (!source) return [];

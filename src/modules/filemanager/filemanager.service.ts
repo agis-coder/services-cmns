@@ -1,8 +1,8 @@
 // src/modules/import-file/import-file.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { ImportFile, ImportStatus } from '../../database/entity/import-file.entity';
 import { Repository } from 'typeorm';
+import { ImportFile, ImportStatus } from '../../database/entity/import-file.entity';
 
 @Injectable()
 export class FileManagerService {
@@ -22,9 +22,12 @@ export class FileManagerService {
 
         const qb = this.importFileRepo
             .createQueryBuilder('f')
-            .leftJoin('f.customers', 'c')
-            .leftJoin('f.new_sales', 'n')
-            .leftJoin('f.transfers', 't')
+            .select([
+                'f.id',
+                'f.file_name',
+                'f.status',
+                'f.imported_at',
+            ])
             .loadRelationCountAndMap('f.customer_count', 'f.customers')
             .loadRelationCountAndMap('f.new_sale_count', 'f.new_sales')
             .loadRelationCountAndMap('f.transfer_count', 'f.transfers')
@@ -36,7 +39,11 @@ export class FileManagerService {
             qb.andWhere('f.status = :status', { status: params.status });
         }
 
-        const [data, total] = await qb.getManyAndCount();
+        const data = await qb.getMany();
+
+        const total = await this.importFileRepo.count({
+            where: params.status ? { status: params.status } : {},
+        });
 
         return {
             data,

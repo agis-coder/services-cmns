@@ -27,7 +27,7 @@ export class Customer {
     @Column({ nullable: true })
     cccd: string;
 
-    @Column({ nullable: true })
+    @Column({ type: 'text', nullable: true })
     email: string;
 
     @Column({ nullable: true })
@@ -84,5 +84,11 @@ export class Customer {
 
     @ManyToOne(() => ImportFile, { nullable: true, onDelete: 'CASCADE' })
     import_file: ImportFile;
+
+    @Column({ type: 'boolean', default: false })
+    isVip: boolean;
+
+    @Column({ type: 'int', default: 0 })
+    level: number;
 }
 

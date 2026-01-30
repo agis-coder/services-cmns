@@ -1,7 +1,7 @@
 export const HEADER_MAP = {
     project_name: ['TÊN DỰ ÁN', 'Project'],
     product_type: ['LOẠI SẢN PHẨM'],
-    subdivision: ['PHÂN KHU'],
+    subdivision: ['PHÂN KHU', 'subdivision'],
     unit_code: ['MÃ CĂN', 'CĂN SỐ'],
     floor: ['TẦNG/DÃY'],
     land_area: ['DIỆN TÍCH ĐẤT/DIỆN TÍCH TIM TƯỜNG'],
@@ -13,6 +13,7 @@ export const HEADER_MAP = {
     soucre: ['NGUỒN TỪ ĐÂU', 'soucre'],
     source_details: ['CHI TIẾT NGUỒN'],
     investor: ['Chủ đầu tư', 'investor'],
+
     customer_name: ['HỌ VÀ TÊN KHÁCH HÀNG', 'Tên', 'Họ và Tên', 'Full Name'],
     date_of_birth: ['NGÀY THÁNG NĂM SINH'],
     phone_number: ['PHONE', 'SĐT', 'SỐ ĐIỆN THOẠI'],
