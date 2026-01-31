@@ -139,7 +139,13 @@ export class ImportService {
                     HEADER_MAP.phone_number,
                     rowIndex,
                 );
+                const email = getValueStrict(row, HEADER_MAP.email) || '';
 
+                // ===== LOG EMAIL =====
+                console.log(
+                    `[IMPORT][ROW ${rowIndex}] email =`,
+                    email ? email : '(EMPTY)',
+                );
                 const customerKey = `${normalize(phone)}|${normalize(customerName)}`;
 
                 const projectName =
@@ -236,11 +242,10 @@ export class ImportService {
                                 email: getValueStrict(row, HEADER_MAP.email),
                                 address: getValueStrict(row, HEADER_MAP.address),
                                 permanent_address: getValueStrict(row, HEADER_MAP.permanent_address),
-                                import_file: importFile, // 🔥 FIX: gắn importFile cho customer
+                                import_file: importFile,
                             }),
                         );
                     }
-
                     customerMap.set(customerKey, customer);
                 }
 

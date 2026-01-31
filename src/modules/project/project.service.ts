@@ -13,13 +13,15 @@ interface ProjectTemp {
 
 interface InvestorTemp {
     investor: string;
-    quantity: number;
+    quantity: number;              // số project
     totalCustomers: number;
     totalEmails: Set<string>;
     totalPhones: Set<string>;
-    projectMap: Map<string, ProjectTemp>; // ✅ FIX Ở ĐÂY
+    customerSet: Set<string>;
+    projectMap: Map<string, ProjectTemp>;
 }
 
+// ===== RESPONSE =====
 interface ProjectSummary {
     project_id: string;
     project_name: string;
@@ -30,8 +32,8 @@ interface ProjectSummary {
 
 interface InvestorSummary {
     investor: string;
-    quantity: number;
-    totalCustomers: number;
+    quantity: number;              // số project
+    totalCustomers: number;        // khách unique
     totalEmails: number;
     totalPhones: number;
     list: ProjectSummary[];
@@ -138,6 +140,7 @@ export class ProjectService {
                 'p.investor AS investor',
                 'p.id AS project_id',
                 'p.project_name AS project_name',
+                'c.id AS customer_id',           // ✅ rất quan trọng
                 'c.email AS email',
                 'c.phone_number AS phone',
             ])
@@ -148,19 +151,22 @@ export class ProjectService {
         const investorMap = new Map<string, InvestorTemp>();
 
         for (const row of rows) {
+            // ===== INIT INVESTOR =====
             if (!investorMap.has(row.investor)) {
                 investorMap.set(row.investor, {
                     investor: row.investor,
-                    quantity: 0,
-                    totalCustomers: 0,
+                    quantity: 0,                       // số project
+                    totalCustomers: 0,                 // set sau
                     totalEmails: new Set<string>(),
                     totalPhones: new Set<string>(),
-                    projectMap: new Map<string, ProjectTemp>(), // ✅ FIX
+                    customerSet: new Set<string>(),    // ✅ FIX
+                    projectMap: new Map<string, ProjectTemp>(),
                 });
             }
 
             const investorItem = investorMap.get(row.investor)!;
 
+            // ===== INIT PROJECT =====
             if (!investorItem.projectMap.has(row.project_id)) {
                 investorItem.projectMap.set(row.project_id, {
                     project_id: row.project_id,
@@ -169,24 +175,32 @@ export class ProjectService {
                     emailSet: new Set<string>(),
                     phoneSet: new Set<string>(),
                 });
+
                 investorItem.quantity += 1;
             }
 
             const projectItem = investorItem.projectMap.get(row.project_id)!;
 
-            investorItem.totalCustomers += 1;
+            // ===== CUSTOMER (UNIQUE) =====
+            if (row.customer_id) {
+                investorItem.customerSet.add(row.customer_id);
+                projectItem.customerSet.add(row.customer_id);
+            }
 
-            this.extractEmails(row.email).forEach(e => {
-                projectItem.emailSet.add(e);
-                investorItem.totalEmails.add(e);
+            // ===== EMAIL =====
+            this.extractEmails(row.email).forEach(email => {
+                investorItem.totalEmails.add(email);
+                projectItem.emailSet.add(email);
             });
 
-            this.extractPhones(row.phone).forEach(p => {
-                projectItem.phoneSet.add(p);
-                investorItem.totalPhones.add(p);
+            // ===== PHONE =====
+            this.extractPhones(row.phone).forEach(phone => {
+                investorItem.totalPhones.add(phone);
+                projectItem.phoneSet.add(phone);
             });
         }
 
+        // ===== BUILD RESULT =====
         const result: InvestorSummary[] = [];
 
         for (const investorItem of investorMap.values()) {
@@ -206,7 +220,7 @@ export class ProjectService {
             result.push({
                 investor: investorItem.investor,
                 quantity: investorItem.quantity,
-                totalCustomers: investorItem.totalCustomers,
+                totalCustomers: investorItem.customerSet.size, // ✅ FIX CHUẨN
                 totalEmails: investorItem.totalEmails.size,
                 totalPhones: investorItem.totalPhones.size,
                 list: projects,
@@ -215,5 +229,6 @@ export class ProjectService {
 
         return result;
     }
+
 
 }
