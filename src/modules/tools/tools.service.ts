@@ -182,6 +182,26 @@ export class ToolsService {
         return null;
     }
 
+    private extractPhonesByRegex(raw: string): string[] {
+        if (!raw) return [];
+
+        const text = raw.replace(/\s+/g, '');
+
+        const matches = text.match(
+            /(\+84|84|0)([35789]\d{8,9})/g
+        ) || [];
+
+        const out: string[] = [];
+
+        for (const m of matches) {
+            const fixed = this.normalizeSinglePhone(m);
+            if (fixed) out.push(fixed);
+        }
+
+        return [...new Set(out)];
+    }
+
+
     private extractPhonesSmart(raw: string): string[] {
         const digits = raw.replace(/\D/g, '');
         const mobiles: string[] = [];
@@ -330,12 +350,20 @@ export class ToolsService {
                     continue;
                 }
 
-                // 3️⃣ fallback dính liền
+                // 3️⃣ fallback regex VN (có chữ chen)
+                const byRegex = this.extractPhonesByRegex(rawPart);
+                if (byRegex.length) {
+                    result.push(...byRegex);
+                    continue;
+                }
+
+                // 4️⃣ fallback dính liền số
                 const digits = rawPart.replace(/\D/g, '');
                 if (digits.length >= 10) {
                     const many = this.extractPhonesSmart(rawPart);
                     result.push(...many);
                 }
+
             }
         }
 

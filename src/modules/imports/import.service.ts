@@ -106,11 +106,17 @@ export class ImportService {
     ) {
         const workbook = XLSX.read(file.buffer, { type: 'buffer' });
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+        const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, {
+            defval: '',
+        });
 
         const qr = this.dataSource.createQueryRunner();
         await qr.connect();
         await qr.startTransaction();
+
+        const normalize = (v: string) => (v ?? '').trim().toLowerCase();
+        const isEmpty = (v: any) =>
+            v === null || v === undefined || String(v).trim() === '';
 
         try {
             const importFile = await qr.manager.save(
@@ -121,8 +127,6 @@ export class ImportService {
 
             const customerMap = new Map<string, Customer>();
             const detailMap = new Map<string, ProjectDetail>();
-
-            const normalize = (v: string) => (v ?? '').trim().toLowerCase();
 
             for (let i = 0; i < rows.length; i++) {
                 const row = rows[i];
@@ -139,13 +143,7 @@ export class ImportService {
                     HEADER_MAP.phone_number,
                     rowIndex,
                 );
-                const email = getValueStrict(row, HEADER_MAP.email) || '';
 
-                // ===== LOG EMAIL =====
-                console.log(
-                    `[IMPORT][ROW ${rowIndex}] email =`,
-                    email ? email : '(EMPTY)',
-                );
                 const customerKey = `${normalize(phone)}|${normalize(customerName)}`;
 
                 const projectName =
@@ -206,15 +204,41 @@ export class ImportService {
                                 project,
                                 unit_code: unitCode,
                                 product_type: productType,
-                                subdivision: getValueStrict(row, HEADER_MAP.subdivision) || '',
-                                floor: getValueStrict(row, HEADER_MAP.floor) || '',
-                                land_area: parseMoney(getValueStrict(row, HEADER_MAP.land_area)) || 0,
-                                usable_area: parseMoney(getValueStrict(row, HEADER_MAP.usable_area)) || 0,
-                                door_direction: getValueStrict(row, HEADER_MAP.door_direction) || '',
-                                view: getValueStrict(row, HEADER_MAP.view) || '',
+                                subdivision:
+                                    getValueStrict(
+                                        row,
+                                        HEADER_MAP.subdivision,
+                                    ) || '',
+                                floor:
+                                    getValueStrict(row, HEADER_MAP.floor) || '',
+                                land_area:
+                                    parseMoney(
+                                        getValueStrict(
+                                            row,
+                                            HEADER_MAP.land_area,
+                                        ),
+                                    ) || 0,
+                                usable_area:
+                                    parseMoney(
+                                        getValueStrict(
+                                            row,
+                                            HEADER_MAP.usable_area,
+                                        ),
+                                    ) || 0,
+                                door_direction:
+                                    getValueStrict(
+                                        row,
+                                        HEADER_MAP.door_direction,
+                                    ) || '',
+                                view:
+                                    getValueStrict(row, HEADER_MAP.view) || '',
                                 contract_price: contractPrice,
                                 source,
-                                day_trading: getValueStrict(row, HEADER_MAP.day_trading) || null,
+                                day_trading:
+                                    getValueStrict(
+                                        row,
+                                        HEADER_MAP.day_trading,
+                                    ) || null,
                             }),
                         );
                     }
@@ -233,7 +257,44 @@ export class ImportService {
                             },
                         })) ?? undefined;
 
-                    if (!customer) {
+                    if (customer) {
+                        const updatedData: Partial<Customer> = {};
+
+                        const email = getValueStrict(row, HEADER_MAP.email);
+                        if (isEmpty(customer.email) && !isEmpty(email)) {
+                            updatedData.email = email;
+                        }
+
+                        const address = getValueStrict(row, HEADER_MAP.address);
+                        if (isEmpty(customer.address) && !isEmpty(address)) {
+                            updatedData.address = address;
+                        }
+
+                        const permanentAddress = getValueStrict(
+                            row,
+                            HEADER_MAP.permanent_address,
+                        );
+                        if (
+                            isEmpty(customer.permanent_address) &&
+                            !isEmpty(permanentAddress)
+                        ) {
+                            updatedData.permanent_address = permanentAddress;
+                        }
+
+                        const cccd = getValueStrict(row, HEADER_MAP.cccd);
+                        if (isEmpty(customer.cccd) && !isEmpty(cccd)) {
+                            updatedData.cccd = cccd;
+                        }
+
+                        if (Object.keys(updatedData).length > 0) {
+                            await qr.manager.update(
+                                Customer,
+                                customer.id,
+                                updatedData,
+                            );
+                            customer = Object.assign(customer, updatedData);
+                        }
+                    } else {
                         customer = await qr.manager.save(
                             qr.manager.create(Customer, {
                                 customer_name: customerName,
@@ -241,11 +302,15 @@ export class ImportService {
                                 cccd: getValueStrict(row, HEADER_MAP.cccd),
                                 email: getValueStrict(row, HEADER_MAP.email),
                                 address: getValueStrict(row, HEADER_MAP.address),
-                                permanent_address: getValueStrict(row, HEADER_MAP.permanent_address),
+                                permanent_address: getValueStrict(
+                                    row,
+                                    HEADER_MAP.permanent_address,
+                                ),
                                 import_file: importFile,
                             }),
                         );
                     }
+
                     customerMap.set(customerKey, customer);
                 }
 
@@ -261,9 +326,9 @@ export class ImportService {
                     if (!existed) {
                         await qr.manager.save(
                             qr.manager.create(ProjectNewSale, {
-                                project_detail: detail,
-                                customer,
-                                import_file: importFile,
+                                project_detail: { id: detail.id },
+                                customer: { id: customer.id },
+                                import_file: { id: importFile.id },
                             }),
                         );
                     }
@@ -279,9 +344,9 @@ export class ImportService {
                     if (!existed) {
                         await qr.manager.save(
                             qr.manager.create(ProjectTransfer, {
-                                project_detail: detail,
-                                customer,
-                                import_file: importFile,
+                                project_detail: { id: detail.id },
+                                customer: { id: customer.id },
+                                import_file: { id: importFile.id },
                             }),
                         );
                     }
@@ -297,6 +362,7 @@ export class ImportService {
             await qr.release();
         }
     }
+
 
 
     async deleteImportFile(id: string) {
