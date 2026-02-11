@@ -1,9 +1,9 @@
 export const HEADER_MAP = {
     project_name: ['TÊN DỰ ÁN', 'Project'],
     product_type: ['LOẠI SẢN PHẨM'],
-    subdivision: ['PHÂN KHU', 'subdivision'],
-    unit_code: ['MÃ CĂN', 'CĂN SỐ'],
-    floor: ['TẦNG/DÃY'],
+    subdivision: ['PHÂN KHU', 'subdivision', 'BLOCK'],
+    unit_code: ['MÃ CĂN', 'CĂN SỐ', 'unit code', 'UNITCODE'],
+    floor: ['floor'],
     land_area: ['DIỆN TÍCH ĐẤT/DIỆN TÍCH TIM TƯỜNG'],
     usable_area: ['DIỆN TÍCH SÀN XÂY DỰNG/DIỆN TÍCH THÔNG THỦY'],
     door_direction: ['HƯỚNG CỬA'],
@@ -15,11 +15,12 @@ export const HEADER_MAP = {
     investor: ['Chủ đầu tư', 'investor'],
 
     customer_name: ['HỌ VÀ TÊN KHÁCH HÀNG', 'Tên', 'Họ và Tên', 'Full Name'],
-    date_of_birth: ['NGÀY THÁNG NĂM SINH'],
+    date_of_birth: ['NGÀY THÁNG NĂM SINH', 'date_of_birth'],
     phone_number: ['PHONE', 'SĐT', 'SỐ ĐIỆN THOẠI'],
     cccd: ['CCCD'],
     email: ['EMAIL'],
-    address: ['ĐỊA CHỈ LIÊN HỆ'],
+    gender: ['gender'],
+    address: ['ĐỊA CHỈ LIÊN HỆ', 'address'],
     permanent_address: ['ĐỊA CHỈ THƯỜNG TRÚ'],
     living_area: ['KHU VỰC SINH SỐNG'],
     nationality: ['QUỐC TỊCH'],
@@ -34,7 +35,7 @@ export const HEADER_MAP = {
 
     dealer_name: ['TÊN ĐẠI LÝ'],
     outside_sales_name: ['TÊN SALE NGOÀI'],
-    phone_sale: ['SĐT SALE NGOÀI'],
+    phone_sale: ['SĐT SALE NGOÀI', 'phone_sale'],
     email_sale: ['EMAIL SALE NGOÀI'],
 
     first_interaction_transfer: ['TƯƠNG TÁC LẦN ĐẦU (THỨ CẤP)'],
