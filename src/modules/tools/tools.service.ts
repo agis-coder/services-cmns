@@ -179,7 +179,15 @@ export class ToolsService {
             return digits.length === 10 ? digits : null;
         }
 
+        // 🆕 FIX CUỐI: nếu còn bắt đầu bằng 84 → đổi thành 0
+        if (/^84\d{9,10}$/.test(num)) {
+            const converted = '0' + num.slice(2);
+            return converted.length === 10 ? converted : null;
+        }
+
+
         return null;
+
     }
 
     private extractPhonesByRegex(raw: string): string[] {
@@ -367,7 +375,16 @@ export class ToolsService {
             }
         }
 
-        return [...new Set(result)].join('-');
+        return [...new Set(result)]
+            .map(p => {
+                // 🔧 nếu còn bắt đầu bằng 84 và đủ 11 số → đổi về 0
+                if (/^84\d{9}$/.test(p)) {
+                    return '0' + p.slice(2);
+                }
+                return p;
+            })
+            .join('-');
+
     }
 
     async processSingleExcelWithAkabiz(
