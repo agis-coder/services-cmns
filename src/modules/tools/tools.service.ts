@@ -56,6 +56,7 @@ export class ToolsService {
     //     }
     //     return [];
     // }
+
     private splitLongDigits(raw: string): string[] {
         const digits = raw.replace(/\D/g, '');
         const out: string[] = [];
@@ -398,7 +399,7 @@ export class ToolsService {
 
         const { buffer, phones } = await this.processExcel(file.buffer);
 
-        const phoneName = file.originalname.replace(/\.xlsx?$/i, '_PHONE.xlsx');
+        const phoneName = file.originalname.replace(/\.xlsx?$/i, '.xlsx');
         zip.file(phoneName, buffer);
 
         const akabizBuffer = await this.buildAkabizExcel(phones);

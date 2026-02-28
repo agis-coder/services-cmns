@@ -386,6 +386,46 @@ export class ImportService {
             const importFileTable =
                 this.dataSource.getMetadata(ImportFile).tableName;
 
+
+            const customerRows = await qr.query(
+                `
+            SELECT id FROM ${customerTable}
+            WHERE importFileId = ?
+            `,
+                [id],
+            );
+
+            const customerIds = customerRows.map((r: any) => r.id);
+
+
+            if (customerIds.length > 0) {
+                await qr.query(
+                    `
+                DELETE FROM ${newSaleTable}
+                WHERE customerId IN (?)
+                `,
+                    [customerIds],
+                );
+
+                await qr.query(
+                    `
+                DELETE FROM ${transferTable}
+                WHERE customerId IN (?)
+                `,
+                    [customerIds],
+                );
+            }
+
+
+            await qr.query(
+                `
+            DELETE FROM ${customerTable}
+            WHERE importFileId = ?
+            `,
+                [id],
+            );
+
+
             const detailRows = await qr.query(
                 `
             SELECT DISTINCT pd.id
@@ -402,33 +442,10 @@ export class ImportService {
 
             const projectDetailIds = detailRows.map((r: any) => r.id);
 
-            await qr.query(
-                `
-            DELETE FROM ${newSaleTable}
-            WHERE importFileId = ?
-            `,
-                [id],
-            );
-
-            await qr.query(
-                `
-            DELETE FROM ${transferTable}
-            WHERE importFileId = ?
-            `,
-                [id],
-            );
-
-            await qr.query(
-                `
-            DELETE FROM ${customerTable}
-            WHERE importFileId = ?
-            `,
-                [id],
-            );
-
             if (projectDetailIds.length > 0) {
                 await qr.manager.delete(ProjectDetail, projectDetailIds);
             }
+
 
             await qr.query(
                 `
@@ -439,6 +456,7 @@ export class ImportService {
             );
 
             await qr.commitTransaction();
+
             return {
                 message:
                     'Đã xóa toàn bộ dữ liệu của file import (customer, new sale, transfer, project detail)',
@@ -450,7 +468,6 @@ export class ImportService {
             await qr.release();
         }
     }
-
 
 
 }
