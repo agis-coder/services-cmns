@@ -16,8 +16,7 @@ export class ProjectController {
         enum: ProjectCategory,
         required: false,
     })
-    async getInvestors(@Query('category') category: ProjectCategory) {
-        console.log('category:', category)
+    async getInvestors(@Query('category') category: ProjectCategory): Promise<any> {
         return this.projectService.getInvestorsByCategory(category);
     }
 
@@ -31,6 +30,23 @@ export class ProjectController {
         @Query("search") search?: string
     ) {
         return this.projectService.getProjects(page, pageSize, search);
+    }
+
+    @Get(":id/customers")
+    @ApiOperation({
+        summary: "Danh sách khách hàng theo project",
+        description: "Lấy danh sách khách hàng đã mua trong dự án theo project_id",
+    })
+    @ApiParam({
+        name: "id",
+        type: String,
+        description: "Project ID",
+    })
+    @ApiOkResponse({
+        description: "Danh sách khách hàng",
+    })
+    async getCustomersByProject(@Param("id") id: string) {
+        return this.projectService.getCustomersByProject(id);
     }
 
     @Get(":id")

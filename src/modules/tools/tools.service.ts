@@ -312,36 +312,23 @@ export class ToolsService {
                     continue;
                 }
             }
-
-            // số bàn / nội hạt → bỏ
             i++;
         }
 
-        // 🔒 CHỐT NGHIỆP VỤ:
-        // nếu chỉ có 1 số di động → trả đúng số đó
         if (mobiles.length === 1) {
             return mobiles;
         }
-
-        // nếu >1 → coi là nhiều di động thật
         return [...new Set(mobiles)];
     }
 
     normalizePhoneEdit(cell: any): string {
         let raw = this.getCellText(cell);
         if (!raw) return '';
-
-        const lines = raw
-            .split(/\r?\n/)
-            .map(l => l.trim())
-            .filter(Boolean);
-
+        const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const result: string[] = [];
-
         for (const line of lines) {
             const cleaned = this.cleanPhoneNoise(line);
             const parts = cleaned.split(/[,;/\-|]/);
-
             for (const p of parts) {
                 const rawPart = p.trim();
                 if (!rawPart) continue;
@@ -375,37 +362,28 @@ export class ToolsService {
 
             }
         }
-
-        return [...new Set(result)]
-            .map(p => {
-                // 🔧 nếu còn bắt đầu bằng 84 và đủ 11 số → đổi về 0
-                if (/^84\d{9}$/.test(p)) {
-                    return '0' + p.slice(2);
-                }
-                return p;
-            })
-            .join('-');
-
+        return [...new Set(result)].map(p => {
+            if (/^[35789]\d{8}$/.test(p)) {
+                return '0' + p;
+            }
+            if (/^84\d{9}$/.test(p)) {
+                return '0' + p.slice(2);
+            }
+            return p;
+        }).filter(p => /^\d{10}$/.test(p)).join('-');
     }
 
-    async processSingleExcelWithAkabiz(
-        file: Express.Multer.File,
-    ): Promise<Buffer> {
+    async processSingleExcelWithAkabiz(file: Express.Multer.File,): Promise<Buffer> {
         if (!file?.buffer) {
             throw new BadRequestException('File không hợp lệ');
         }
-
         const zip = new JSZip();
-
         const { buffer, phones } = await this.processExcel(file.buffer);
-
         const phoneName = file.originalname.replace(/\.xlsx?$/i, '.xlsx');
         zip.file(phoneName, buffer);
-
         const akabizBuffer = await this.buildAkabizExcel(phones);
         const akabizName = file.originalname.replace(/\.xlsx?$/i, '_AKABIZ.xlsx');
         zip.file(akabizName, akabizBuffer);
-
         return zip.generateAsync({ type: 'nodebuffer' });
     }
 
@@ -428,23 +406,13 @@ export class ToolsService {
     async processExcel(fileBuffer: unknown): Promise<{ buffer: Buffer; phones: string[] }> {
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(fileBuffer as any);
-
         const sheet = workbook.worksheets[0];
         if (!sheet) throw new BadRequestException('File Excel trống');
-
         let phoneCol: number | null = null;
         let editCol: number | null = null;
-
-        // 🔍 tìm PHONE + PHONE EDIT
         sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, col) => {
             const t = this.getCellText(cell.value).toUpperCase();
-            if (
-                t === 'ĐIỆN THOẠI' ||
-                t === 'SỐ ĐIỆN THOẠI' ||
-                t === 'SDT' ||
-                t === 'SĐT' ||
-                t === 'PHONE'
-            ) {
+            if (t === 'ĐIỆN THOẠI' || t === 'SỐ ĐIỆN THOẠI' || t === 'SDT' || t === 'SĐT' || t === 'PHONE') {
                 phoneCol = col;
             }
             if (t === 'PHONE EDIT') {
@@ -455,49 +423,34 @@ export class ToolsService {
         if (!phoneCol) {
             throw new BadRequestException('Không tìm thấy cột ĐIỆN THOẠI');
         }
-
-        // ➕ nếu chưa có PHONE EDIT → thêm ở CUỐI
         if (!editCol) {
             editCol = sheet.columnCount + 1;
             sheet.getRow(1).getCell(editCol).value = 'PHONE EDIT';
             sheet.getColumn(editCol).numFmt = '@';
         }
-
-        // 📄 sheet PHONE
         const phoneSheet = workbook.addWorksheet('PHONE');
         phoneSheet.getColumn(1).numFmt = '@';
         phoneSheet.addRow(['PHONE']);
-
         const vnSet = new Set<string>();
         const phoneList: string[] = [];
-
         sheet.eachRow((row, i) => {
             if (i === 1) return;
-
             const cell = row.getCell(phoneCol!).value;
             const edited = this.normalizePhoneEdit(cell);
-
             row.getCell(editCol!).value = edited;
-
-            edited
-                .split(/[-,;/|]/)
-                .map(p => p.trim())
-                .filter(p => /^\d{10}$/.test(p))
-                .forEach(p => {
-                    if (!vnSet.has(p)) {
-                        vnSet.add(p);
-                        phoneSheet.addRow([p]);
-                        phoneList.push(p);
-                    }
-                });
+            edited.split(/[-,;/|]/).map(p => p.trim()).filter(p => /^\d{10}$/.test(p)).forEach(p => {
+                if (!vnSet.has(p)) {
+                    vnSet.add(p);
+                    phoneSheet.addRow([p]);
+                    phoneList.push(p);
+                }
+            });
         });
-
         return {
             buffer: Buffer.from(await workbook.xlsx.writeBuffer()),
             phones: phoneList,
         };
     }
-
 
     async processMultipleExcel(files: Express.Multer.File[]): Promise<Buffer> {
         if (!files || files.length === 0) {

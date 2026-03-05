@@ -130,6 +130,7 @@ export class ProjectService {
     async getInvestorsByCategory(
         category: ProjectCategory,
     ): Promise<InvestorSummary[]> {
+
         const rows = await this.dataSource
             .createQueryBuilder()
             .from('projects', 'p')
@@ -140,33 +141,33 @@ export class ProjectService {
                 'p.investor AS investor',
                 'p.id AS project_id',
                 'p.project_name AS project_name',
-                'c.id AS customer_id',           // ✅ rất quan trọng
-                'c.email AS email',
-                'c.phone_number AS phone',
+                'c.id AS customer_id',
+                'MAX(c.email) AS email',
+                'MAX(c.phone_number) AS phone',
             ])
             .where('p.project_category = :category', { category })
             .andWhere('p.investor IS NOT NULL')
+            .groupBy('p.id, c.id')
             .getRawMany();
 
         const investorMap = new Map<string, InvestorTemp>();
 
         for (const row of rows) {
-            // ===== INIT INVESTOR =====
+
             if (!investorMap.has(row.investor)) {
                 investorMap.set(row.investor, {
                     investor: row.investor,
-                    quantity: 0,                       // số project
-                    totalCustomers: 0,                 // set sau
+                    quantity: 0,
+                    totalCustomers: 0,
                     totalEmails: new Set<string>(),
                     totalPhones: new Set<string>(),
-                    customerSet: new Set<string>(),    // ✅ FIX
+                    customerSet: new Set<string>(),
                     projectMap: new Map<string, ProjectTemp>(),
                 });
             }
 
             const investorItem = investorMap.get(row.investor)!;
 
-            // ===== INIT PROJECT =====
             if (!investorItem.projectMap.has(row.project_id)) {
                 investorItem.projectMap.set(row.project_id, {
                     project_id: row.project_id,
@@ -181,37 +182,35 @@ export class ProjectService {
 
             const projectItem = investorItem.projectMap.get(row.project_id)!;
 
-            // ===== CUSTOMER (UNIQUE) =====
             if (row.customer_id) {
-                investorItem.customerSet.add(row.customer_id);
                 projectItem.customerSet.add(row.customer_id);
             }
 
-            // ===== EMAIL =====
             this.extractEmails(row.email).forEach(email => {
-                investorItem.totalEmails.add(email);
                 projectItem.emailSet.add(email);
             });
 
-            // ===== PHONE =====
             this.extractPhones(row.phone).forEach(phone => {
-                investorItem.totalPhones.add(phone);
                 projectItem.phoneSet.add(phone);
             });
         }
 
-        // ===== BUILD RESULT =====
         const result: InvestorSummary[] = [];
 
         for (const investorItem of investorMap.values()) {
+
             const projects: ProjectSummary[] = [];
+            let totalCustomers = 0;
 
             for (const projectItem of investorItem.projectMap.values()) {
+
+                const customerCount = projectItem.customerSet.size;
+                totalCustomers += customerCount;
+
                 projects.push({
                     project_id: projectItem.project_id,
                     project_name: projectItem.project_name,
-                    quantity:
-                        projectItem.emailSet.size + projectItem.phoneSet.size,
+                    quantity: customerCount,
                     email_quantity: projectItem.emailSet.size,
                     phone_quantity: projectItem.phoneSet.size,
                 });
@@ -220,9 +219,9 @@ export class ProjectService {
             result.push({
                 investor: investorItem.investor,
                 quantity: investorItem.quantity,
-                totalCustomers: investorItem.customerSet.size, // ✅ FIX CHUẨN
-                totalEmails: investorItem.totalEmails.size,
-                totalPhones: investorItem.totalPhones.size,
+                totalCustomers: totalCustomers,
+                totalEmails: 0,
+                totalPhones: 0,
                 list: projects,
             });
         }
@@ -230,5 +229,39 @@ export class ProjectService {
         return result;
     }
 
+    async getCustomersByProject(projectId: string) {
+        const rows = await this.dataSource
+            .createQueryBuilder()
+            .from('projects', 'p')
+            .leftJoin('project_details', 'd', 'd.project_id = p.id')
+            .leftJoin('project_new_sales', 'ns', 'ns.project_detail_id = d.id')
+            .leftJoin('customers', 'c', 'c.id = ns.customerId')
+            .select([
+                'c.id AS customer_id',
+                'c.customer_name AS customer_name',
+                'c.phone_number AS phone',
+                'c.address AS address',
+                'COUNT(ns.id) AS total_units'
+            ])
+            .where('p.id = :projectId', { projectId })
+            .andWhere('c.id IS NOT NULL')
+            .groupBy('c.id')
+            .addGroupBy('c.customer_name')
+            .addGroupBy('c.phone_number')
+            .addGroupBy('c.address')
+            .orderBy('total_units', 'DESC')
+            .getRawMany();
+
+        console.log('SL:', rows.length)
+
+        return rows.map(r => ({
+            customer_id: r.customer_id,
+            customer_name: r.customer_name,
+            phone: r.phone,
+            address: r.address,
+            total_units: Number(r.total_units),
+        }));
+
+    }
 
 }

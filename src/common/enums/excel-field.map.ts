@@ -9,7 +9,7 @@ export const HEADER_MAP = {
     door_direction: ['HƯỚNG CỬA'],
     view: ['VIEW'],
     contract_price: ['GIÁ GỐC TRÊN HỢP ĐỒNG', 'contract_price'],
-    day_trading: ['GIAO DỊCH NGÀY'],
+    day_trading: ['GIAO DỊCH NGÀY', 'day_trading'],
     soucre: ['NGUỒN TỪ ĐÂU', 'soucre'],
     source_details: ['CHI TIẾT NGUỒN'],
     investor: ['Chủ đầu tư', 'investor'],
@@ -21,7 +21,7 @@ export const HEADER_MAP = {
     email: ['EMAIL'],
     gender: ['gender'],
     address: ['ĐỊA CHỈ LIÊN HỆ', 'address'],
-    permanent_address: ['ĐỊA CHỈ THƯỜNG TRÚ'],
+    permanent_address: ['ĐỊA CHỈ THƯỜNG TRÚ', 'permanent_address'],
     living_area: ['KHU VỰC SINH SỐNG'],
     nationality: ['QUỐC TỊCH'],
     marital_status: ['TÌNH TRẠNG HÔN NHÂN'],
@@ -34,7 +34,7 @@ export const HEADER_MAP = {
     employee_name: ['TÊN NHÂN VIÊN'],
 
     dealer_name: ['TÊN ĐẠI LÝ'],
-    outside_sales_name: ['TÊN SALE NGOÀI'],
+    outside_sales_name: ['TÊN SALE NGOÀI', 'Sale Name'],
     phone_sale: ['SĐT SALE NGOÀI', 'phone_sale'],
     email_sale: ['EMAIL SALE NGOÀI'],
 
