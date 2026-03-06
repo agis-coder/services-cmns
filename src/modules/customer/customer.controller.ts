@@ -14,60 +14,18 @@ export class CustomerController {
     @ApiQuery({ name: 'source', required: false, type: String })
     @ApiQuery({ name: 'subdivision', required: false, type: String })
     @ApiQuery({ name: 'customerName', required: false, type: String })
-
-    @ApiQuery({
-        name: 'country',
-        required: false,
-        enum: ['vn', 'nn'],
-    })
-
-    @ApiQuery({
-        name: 'birthday',
-        required: false,
-        enum: ['today', 'tomorrow'],
-        description: 'Lọc sinh nhật: hôm nay hoặc ngày mai',
-    })
-
-    @ApiQuery({
-        name: 'sortByPurchase',
-        required: false,
-        enum: ['most', 'least'],
-        description: 'Sắp xếp theo số lần mua (most = mua nhiều nhất, least = mua ít nhất)',
-    })
-    async getAll(
-        @Query('page') page = 1,
-        @Query('pageSize') pageSize = 100,
-        @Query('search') search?: string,
-        @Query('source') source?: string,
-        @Query('subdivision') subdivision?: string,
-        @Query('customerName') customerName?: string,
-        @Query('country') country?: 'vn' | 'nn',
-        @Query('birthday') birthday?: 'today' | 'tomorrow',
-        @Query('sortByPurchase') sortByPurchase?: 'most' | 'least',
-    ) {
-        return this.customerService.findAllWithProjects(
-            page,
-            pageSize,
-            search,
-            source,
-            subdivision,
-            customerName,
-            country,
-            birthday,
-            sortByPurchase,
-        );
+    @ApiQuery({ name: 'country', required: false, enum: ['vn', 'nn'], })
+    @ApiQuery({ name: 'birthday', required: false, enum: ['today', 'tomorrow'], description: 'Lọc sinh nhật: hôm nay hoặc ngày mai', })
+    @ApiQuery({ name: 'sortByPurchase', required: false, enum: ['most', 'least'], description: 'Sắp xếp theo số lần mua (most = mua nhiều nhất, least = mua ít nhất)', })
+    async getAll(@Query('page') page = 1, @Query('pageSize') pageSize = 100, @Query('search') search?: string, @Query('source') source?: string, @Query('subdivision') subdivision?: string, @Query('customerName') customerName?: string, @Query('country') country?: 'vn' | 'nn', @Query('birthday') birthday?: 'today' | 'tomorrow', @Query('sortByPurchase') sortByPurchase?: 'most' | 'least',) {
+        return this.customerService.findAllWithProjects(page, pageSize, search, source, subdivision, customerName, country, birthday, sortByPurchase,);
     }
-
-
 
     @Get('subdivisions-by-source')
     @ApiOperation({ summary: 'Lấy danh sách tên tòa (subdivision) theo source', description: 'Ví dụ: source = BDS → trả về danh sách tên tòa thuộc BDS' })
     @ApiQuery({ name: 'source', required: true, example: 'BDS', })
     async getSubdivisionsBySource(@Query('source') source: string) {
-        return {
-            source,
-            subdivisions: await this.customerService.getSubdivisionsBySource(source),
-        };
+        return { source, subdivisions: await this.customerService.getSubdivisionsBySource(source), };
     }
 
     @Get(':id')
@@ -78,7 +36,4 @@ export class CustomerController {
     async getCustomerDetail(@Param('id', new ParseUUIDPipe()) id: string,) {
         return this.customerService.getCustomerDetail(id);
     }
-
-
-
 }

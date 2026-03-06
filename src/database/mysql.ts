@@ -11,11 +11,6 @@ import { ProjectTransfer } from './entity/project-transfer.entity';
 import { ProjectNewSale } from './entity/project-new-sale.entity';
 import { ImportFile } from './entity/import-file.entity';
 import { ProjectDetail } from './entity/project-detail.entity';
-import { PhoneEntity } from './entity/phone.entity';
-import { EmailEntity } from './entity/email.entity';
-import { DeviceEntity } from './entity/device.entity';
-import { ZaloEntity } from './entity/zalo.entity';
-import { FacebookEntity } from './entity/facebook.entity';
 export const mysqlConfig: TypeOrmModuleOptions = {
     type: 'mysql',
     host: 'localhost',
@@ -33,11 +28,6 @@ export const mysqlConfig: TypeOrmModuleOptions = {
         ProjectNewSale,
         ImportFile,
         ProjectDetail,
-        DeviceEntity,
-        PhoneEntity,
-        EmailEntity,
-        FacebookEntity,
-        ZaloEntity,
     ],
     synchronize: false,
     logging: false,

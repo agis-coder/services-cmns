@@ -9,11 +9,7 @@ import { ToolsModule } from './modules/tools/tools.module';
 import { MailModule } from './modules/mails/mail.module';
 import { ProjectModule } from './modules/project/project.module';
 import { FileManagerModule } from './modules/filemanager/filemanager.module';
-import { PhoneModule } from './modules/phonemanager/phone.module';
-import { EmailModule } from './modules/phonemanager/email.module';
-import { ZaloModule } from './modules/phonemanager/zalo.module';
-import { DeviceModule } from './modules/phonemanager/device.module';
-import { FacebookModule } from './modules/phonemanager/facebook.module';
+import { CacheModule } from './modules/caches/cache.module';
 
 @Module({
     imports: [
@@ -24,11 +20,7 @@ import { FacebookModule } from './modules/phonemanager/facebook.module';
         MailModule,
         ProjectModule,
         FileManagerModule,
-        DeviceModule,
-        PhoneModule,
-        EmailModule,
-        FacebookModule,
-        ZaloModule,
+        CacheModule
     ],
 })
 export class AppModule { }

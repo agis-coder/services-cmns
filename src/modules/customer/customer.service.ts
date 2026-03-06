@@ -6,6 +6,7 @@ import { ProjectNewSale } from '../../database/entity/project-new-sale.entity';
 import { ProjectTransfer } from '../../database/entity/project-transfer.entity';
 import { ProjectDetail } from '../../database/entity/project-detail.entity';
 import { CreateCustomerDto, UpdateCustomerDto } from '../../common/dto/customer.dto';
+import { CacheService } from '../caches/cache.service';
 
 const CITY_ALIAS: Record<string, string> = {
     HCM: 'TP Hồ Chí Minh',
@@ -26,6 +27,7 @@ export class CustomerService {
         @InjectRepository(Customer)
         private readonly customerRepo: Repository<Customer>,
         private readonly dataSource: DataSource,
+        private readonly cacheService: CacheService,
     ) { }
 
     async create(dto: CreateCustomerDto): Promise<Customer> {
@@ -46,134 +48,65 @@ export class CustomerService {
         return { message: 'Customer deleted successfully' };
     }
 
-    async findAllWithProjects(
-        page = 1,
-        pageSize = 100,
-        search?: string,
-        sourceDetail?: string,
-        subdivision?: string,
-        customerName?: string,
-        country?: 'vn' | 'nn',
-        birthday?: 'today' | 'tomorrow',
-        sortByPurchase?: 'most' | 'least',
-    ) {
-        const normalizedSearch = normalizeSearch(search || '');
+    async findAllWithProjects(page = 1, pageSize = 100, search?: string, sourceDetail?: string, subdivision?: string, customerName?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow', sortByPurchase?: 'most' | 'least') {
+        const cacheKey = this.cacheService.buildKey('customer_list', { page, pageSize, search, sourceDetail, subdivision, customerName, country, birthday, sortByPurchase });
+        return this.cacheService.wrap(cacheKey, async () => {
+            const normalizedSearch = normalizeSearch(search || '');
+            const qb = this.customerRepo.createQueryBuilder('c')
+                .select(['c.id AS id', 'c.customer_name AS customer_name', 'c.phone_number AS phone_number', 'c.nationality AS nationality', 'c.address AS address'])
+                .addSelect("(SELECT COUNT(DISTINCT project_detail_id) FROM (SELECT customerId, project_detail_id FROM project_new_sales UNION ALL SELECT customerId, project_detail_id FROM project_transfers) t WHERE t.customerId = c.id)", "project_count");
 
-        const qb = this.customerRepo
-            .createQueryBuilder('customer')
-            .leftJoin('customer.new_sales', 'new_sale')
-            .leftJoin('project_details', 'pd_ns', 'pd_ns.id = new_sale.project_detail_id')
-            .leftJoin('customer.transfers', 'transfer')
-            .leftJoin('project_details', 'pd_tf', 'pd_tf.id = transfer.project_detail_id')
+            if (country === 'vn') {
+                qb.andWhere("LOWER(c.nationality) LIKE :vn", { vn: '%vn%' });
+            }
 
-            // ===== COUNT SỐ CĂN: DISTINCT THEO (PROJECT + UNIT_CODE) =====
-            .addSelect(
-                `
-            COUNT(
-                DISTINCT CONCAT(
-                    COALESCE(pd_ns.project_id, pd_tf.project_id),
-                    '_',
-                    COALESCE(pd_ns.unit_code, pd_tf.unit_code)
-                )
-            )
-            `,
-                'purchase_count',
-            )
-            .groupBy('customer.id');
+            if (country === 'nn') {
+                qb.andWhere("(c.nationality IS NULL OR LOWER(c.nationality) NOT LIKE :vn)", { vn: '%vn%' });
+            }
 
-        // ===== FILTER =====
-        if (country === 'vn') {
-            qb.andWhere(`LOWER(customer.nationality) LIKE :vn`, { vn: '%vn%' });
-        }
+            if (normalizedSearch) {
+                const like = `%${normalizedSearch.toLowerCase()}%`;
+                qb.andWhere("(LOWER(c.customer_name) LIKE :like OR LOWER(c.phone_number) LIKE :like OR LOWER(c.address) LIKE :like)", { like });
+            }
 
-        if (country === 'nn') {
-            qb.andWhere(`
-            customer.nationality IS NULL
-            OR LOWER(customer.nationality) NOT LIKE :vn
-        `, { vn: '%vn%' });
-        }
+            if (customerName) {
+                qb.andWhere("LOWER(c.customer_name) LIKE :customerName", { customerName: `%${customerName.toLowerCase()}%` });
+            }
 
-        if (normalizedSearch) {
-            const like = `%${normalizedSearch.toLowerCase()}%`;
-            qb.andWhere(
-                `
-            LOWER(customer.customer_name) LIKE :like
-            OR LOWER(customer.phone_number) LIKE :like
-            OR LOWER(customer.email) LIKE :like
-            OR LOWER(customer.address) LIKE :like
-            `,
-                { like },
-            );
-        }
+            if (birthday === 'today') {
+                qb.andWhere("c.date_of_birth IS NOT NULL AND DAY(c.date_of_birth) = DAY(CURDATE()) AND MONTH(c.date_of_birth) = MONTH(CURDATE())");
+            }
 
-        if (customerName) {
-            qb.andWhere('LOWER(customer.customer_name) LIKE :customerName', {
-                customerName: `%${customerName.toLowerCase()}%`,
-            });
-        }
+            if (birthday === 'tomorrow') {
+                qb.andWhere("c.date_of_birth IS NOT NULL AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY)) AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))");
+            }
 
-        if (birthday === 'today') {
-            qb.andWhere(`
-            customer.date_of_birth IS NOT NULL
-            AND DAY(customer.date_of_birth) = DAY(CURDATE())
-            AND MONTH(customer.date_of_birth) = MONTH(CURDATE())
-        `);
-        }
+            if (sortByPurchase === 'most') {
+                qb.orderBy('project_count', 'DESC');
+            } else if (sortByPurchase === 'least') {
+                qb.orderBy('project_count', 'ASC');
+            } else {
+                qb.orderBy('c.customer_name', 'ASC');
+            }
 
-        if (birthday === 'tomorrow') {
-            qb.andWhere(`
-            customer.date_of_birth IS NOT NULL
-            AND DAY(customer.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
-            AND MONTH(customer.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
-        `);
-        }
+            qb.offset((page - 1) * pageSize).limit(pageSize);
+            const dataRaw = await qb.getRawMany();
+            const totalRaw = await this.customerRepo.createQueryBuilder('c').select('COUNT(c.id)', 'total').getRawOne();
+            const total = Number(totalRaw?.total ?? 0);
+            const data = dataRaw.map((c: any) => ({
+                id: c.id,
+                customer_name: c.customer_name || 'Chưa có',
+                email: c.email || 'Chưa có',
+                phone_number: c.phone_number || 'Chưa có',
+                nationality: c.nationality || 'Chưa có',
+                address: c.address || 'Chưa có',
+                project_count: Number(c.project_count ?? 0)
+            }));
 
-        // ===== SORT =====
-        if (sortByPurchase === 'most') {
-            qb.orderBy('purchase_count', 'DESC');
-        } else if (sortByPurchase === 'least') {
-            qb.orderBy('purchase_count', 'ASC');
-        } else {
-            qb.orderBy('customer.customer_name', 'ASC');
-        }
-
-        // ===== PAGINATION =====
-        qb.skip((page - 1) * pageSize).take(pageSize);
-
-        const [rawAndEntities, totalRaw] = await Promise.all([
-            qb.getRawAndEntities(),
-            qb.clone()
-                .select('COUNT(DISTINCT customer.id)', 'total')
-                .orderBy()
-                .skip(undefined)
-                .take(undefined)
-                .getRawOne(),
-        ]);
-
-        const total = Number(totalRaw?.total) || 0;
-
-        const data = rawAndEntities.entities.map((c, idx) => ({
-            id: c.id,
-            customer_name: c.customer_name || 'Chưa có',
-            phone_number: c.phone_number || 'Chưa có',
-            nationality: c.nationality || 'Chưa có',
-            email: c.email || 'Chưa có',
-            level: c.level ?? 0,
-            isVip: !!c.isVip,
-            date_of_birth: c.date_of_birth || 'Chưa có',
-            address: c.address || 'Chưa có',
-            project_count: Number(rawAndEntities.raw[idx]?.purchase_count ?? 0),
-        }));
-
-        return {
-            data,
-            total,
-            page,
-            pageSize,
-            totalPages: Math.ceil(total / pageSize),
-        };
+            const result = { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
+            return result;
+        }, 120);
     }
-
 
     async searchCustomersWithProjects(search: string, page = 1, pageSize = 20, sourceDetail?: string, customerName?: string) {
         return this.findAllWithProjects(page, pageSize, search, sourceDetail);

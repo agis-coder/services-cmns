@@ -34,8 +34,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3000', 'http://192.168.1.156:3000', 'http://localhost:3001'
-
-    ], // hoặc '*' để test
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
