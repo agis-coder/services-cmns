@@ -1,39 +1,23 @@
 import { ProjectCategory } from '../../common/enums/project-category';
-import {
-    Entity,
-    Column,
-    PrimaryGeneratedColumn,
-    OneToMany,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany, } from 'typeorm';
 import { ProjectDetail } from './project-detail.entity';
 
 @Entity('projects')
 export class Project {
     @PrimaryGeneratedColumn('uuid')
     id: string;
-
     @Column()
-    project_name: string; // VINHOMES GRAND PARK
-
-    @Column({
-        type: 'enum',
-        enum: ProjectCategory,
-        default: ProjectCategory.BDS, // ✅ an toàn khi import
-    })
+    project_name: string;
+    @Column({ type: 'enum', enum: ProjectCategory, default: ProjectCategory.BDS, })
     project_category: ProjectCategory;
-
-    @Column({ nullable: true }) // 🔥 FIX QUAN TRỌNG
-    investor: string; // Chủ đầu tư
-
     @Column({ nullable: true })
-    location: string; // Địa chỉ dự án
-
+    investor: string;
     @Column({ nullable: true })
-    legal: string; // Pháp lý chung
-
+    location: string;
+    @Column({ nullable: true })
+    legal: string;
     @Column({ nullable: true })
     description: string;
-
     @OneToMany(() => ProjectDetail, (d) => d.project)
     details: ProjectDetail[];
 }

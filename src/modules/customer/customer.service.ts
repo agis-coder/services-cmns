@@ -7,6 +7,7 @@ import { ProjectTransfer } from '../../database/entity/project-transfer.entity';
 import { ProjectDetail } from '../../database/entity/project-detail.entity';
 import { CreateCustomerDto, UpdateCustomerDto } from '../../common/dto/customer.dto';
 import { CacheService } from '../caches/cache.service';
+import { Project } from '../../database/entity/project.entity';
 
 const CITY_ALIAS: Record<string, string> = {
     HCM: 'TP Hồ Chí Minh',
@@ -48,37 +49,101 @@ export class CustomerService {
         return { message: 'Customer deleted successfully' };
     }
 
-    async findAllWithProjects(page = 1, pageSize = 100, search?: string, sourceDetail?: string, subdivision?: string, customerName?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow', sortByPurchase?: 'most' | 'least') {
-        const cacheKey = this.cacheService.buildKey('customer_list', { page, pageSize, search, sourceDetail, subdivision, customerName, country, birthday, sortByPurchase });
+    async findAllWithProjects(
+        page = 1,
+        pageSize = 30,
+        search?: string,
+        sourceDetail?: string,
+        projectId?: string,
+        country?: 'vn' | 'nn',
+        birthday?: 'today' | 'tomorrow',
+        sortByPurchase?: 'most' | 'least'
+    ) {
+        const cacheKey = this.cacheService.buildKey('customer_list', {
+            page,
+            pageSize,
+            search,
+            sourceDetail,
+            projectId,
+            country,
+            birthday,
+            sortByPurchase,
+        });
+
         return this.cacheService.wrap(cacheKey, async () => {
             const normalizedSearch = normalizeSearch(search || '');
-            const qb = this.customerRepo.createQueryBuilder('c')
-                .select(['c.id AS id', 'c.customer_name AS customer_name', 'c.phone_number AS phone_number', 'c.nationality AS nationality', 'c.address AS address'])
-                .addSelect("(SELECT COUNT(DISTINCT project_detail_id) FROM (SELECT customerId, project_detail_id FROM project_new_sales UNION ALL SELECT customerId, project_detail_id FROM project_transfers) t WHERE t.customerId = c.id)", "project_count");
+
+            const qb = this.customerRepo
+                .createQueryBuilder('c')
+                .leftJoin(
+                    `(SELECT customerId, COUNT(DISTINCT project_detail_id) AS project_count
+          FROM (
+            SELECT customerId, project_detail_id FROM project_new_sales
+            UNION ALL
+            SELECT customerId, project_detail_id FROM project_transfers
+          ) t
+          GROUP BY customerId)`,
+                    'pc',
+                    'pc.customerId = c.id'
+                )
+                .select([
+                    'c.id AS id',
+                    'c.customer_name AS customer_name',
+                    'c.phone_number AS phone_number',
+                    'c.nationality AS nationality',
+                    'c.address AS address',
+                    'IFNULL(pc.project_count,0) AS project_count',
+                ]);
 
             if (country === 'vn') {
-                qb.andWhere("LOWER(c.nationality) LIKE :vn", { vn: '%vn%' });
+                qb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
             }
 
             if (country === 'nn') {
-                qb.andWhere("(c.nationality IS NULL OR LOWER(c.nationality) NOT LIKE :vn)", { vn: '%vn%' });
+                qb.andWhere('(c.nationality IS NULL OR c.nationality NOT LIKE :vn)', {
+                    vn: '%vn%',
+                });
             }
 
             if (normalizedSearch) {
-                const like = `%${normalizedSearch.toLowerCase()}%`;
-                qb.andWhere("(LOWER(c.customer_name) LIKE :like OR LOWER(c.phone_number) LIKE :like OR LOWER(c.address) LIKE :like)", { like });
-            }
+                const like = `%${normalizedSearch}%`;
 
-            if (customerName) {
-                qb.andWhere("LOWER(c.customer_name) LIKE :customerName", { customerName: `%${customerName.toLowerCase()}%` });
+                qb.andWhere(
+                    `(c.customer_name LIKE :like
+          OR c.phone_number LIKE :like
+          OR c.address LIKE :like)`,
+                    { like }
+                );
             }
 
             if (birthday === 'today') {
-                qb.andWhere("c.date_of_birth IS NOT NULL AND DAY(c.date_of_birth) = DAY(CURDATE()) AND MONTH(c.date_of_birth) = MONTH(CURDATE())");
+                qb.andWhere(
+                    `c.date_of_birth IS NOT NULL
+         AND DAY(c.date_of_birth) = DAY(CURDATE())
+         AND MONTH(c.date_of_birth) = MONTH(CURDATE())`
+                );
             }
 
             if (birthday === 'tomorrow') {
-                qb.andWhere("c.date_of_birth IS NOT NULL AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY)) AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))");
+                qb.andWhere(
+                    `c.date_of_birth IS NOT NULL
+         AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+         AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))`
+                );
+            }
+
+            if (projectId) {
+                qb.andWhere(
+                    `EXISTS (
+          SELECT 1
+          FROM project_details pd
+          LEFT JOIN project_new_sales pns ON pns.project_detail_id = pd.id
+          LEFT JOIN project_transfers pt ON pt.project_detail_id = pd.id
+          WHERE pd.project_id = :projectId
+          AND (pns.customerId = c.id OR pt.customerId = c.id)
+        )`,
+                    { projectId }
+                );
             }
 
             if (sortByPurchase === 'most') {
@@ -90,21 +155,81 @@ export class CustomerService {
             }
 
             qb.offset((page - 1) * pageSize).limit(pageSize);
+
             const dataRaw = await qb.getRawMany();
-            const totalRaw = await this.customerRepo.createQueryBuilder('c').select('COUNT(c.id)', 'total').getRawOne();
+
+            const totalQb = this.customerRepo.createQueryBuilder('c');
+
+            if (country === 'vn') {
+                totalQb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
+            }
+
+            if (country === 'nn') {
+                totalQb.andWhere('(c.nationality IS NULL OR c.nationality NOT LIKE :vn)', {
+                    vn: '%vn%',
+                });
+            }
+
+            if (normalizedSearch) {
+                const like = `%${normalizedSearch}%`;
+
+                totalQb.andWhere(
+                    `(c.customer_name LIKE :like
+          OR c.phone_number LIKE :like
+          OR c.address LIKE :like)`,
+                    { like }
+                );
+            }
+
+            if (birthday === 'today') {
+                totalQb.andWhere(
+                    `c.date_of_birth IS NOT NULL
+         AND DAY(c.date_of_birth) = DAY(CURDATE())
+         AND MONTH(c.date_of_birth) = MONTH(CURDATE())`
+                );
+            }
+
+            if (birthday === 'tomorrow') {
+                totalQb.andWhere(
+                    `c.date_of_birth IS NOT NULL
+         AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+         AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))`
+                );
+            }
+
+            if (projectId) {
+                totalQb.andWhere(
+                    `EXISTS (
+          SELECT 1
+          FROM project_details pd
+          LEFT JOIN project_new_sales pns ON pns.project_detail_id = pd.id
+          LEFT JOIN project_transfers pt ON pt.project_detail_id = pd.id
+          WHERE pd.project_id = :projectId
+          AND (pns.customerId = c.id OR pt.customerId = c.id)
+        )`,
+                    { projectId }
+                );
+            }
+
+            const totalRaw = await totalQb.select('COUNT(c.id)', 'total').getRawOne();
             const total = Number(totalRaw?.total ?? 0);
+
             const data = dataRaw.map((c: any) => ({
                 id: c.id,
                 customer_name: c.customer_name || 'Chưa có',
-                email: c.email || 'Chưa có',
                 phone_number: c.phone_number || 'Chưa có',
                 nationality: c.nationality || 'Chưa có',
                 address: c.address || 'Chưa có',
-                project_count: Number(c.project_count ?? 0)
+                project_count: Number(c.project_count ?? 0),
             }));
 
-            const result = { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize) };
-            return result;
+            return {
+                data,
+                total,
+                page,
+                pageSize,
+                totalPages: Math.ceil(total / pageSize),
+            };
         }, 120);
     }
 
@@ -112,9 +237,38 @@ export class CustomerService {
         return this.findAllWithProjects(page, pageSize, search, sourceDetail);
     }
 
+    async getAllSources() {
+        const cacheKey = 'customer_sources';
+        return this.cacheService.wrap(cacheKey, async () => {
+            const raw = await this.dataSource.query("SELECT DISTINCT p.investor AS source FROM (SELECT project_detail_id FROM project_new_sales UNION ALL SELECT project_detail_id FROM project_transfers) t JOIN project_details pd ON pd.id = t.project_detail_id JOIN projects p ON p.id = pd.project_id WHERE p.investor IS NOT NULL ORDER BY p.investor ASC");
+            return raw.map((r: any) => r.source);
+        }, 300);
+    }
+
+    async getProjectsByInvestor(investor?: string): Promise<any[]> {
+
+        const qb = this.dataSource
+            .createQueryBuilder()
+            .select([
+                'p.id AS id',
+                'p.project_name AS project_name'
+            ])
+            .from(Project, 'p')
+            .distinct(true)
+
+        if (investor && investor !== 'all') {
+            qb.where('p.investor = :investor', { investor })
+        }
+
+        const rows = await qb.getRawMany()
+
+        return rows
+    }
     async getCustomerDetail(id: string, sourceDetail?: string) {
         const customer = await this.customerRepo.findOne({ where: { id } });
-        if (!customer) throw new NotFoundException('Customer not found');
+        if (!customer) {
+            throw new NotFoundException('Customer not found');
+        }
 
         const relatives = await this.dataSource.query(
             `SELECT r.*
@@ -124,55 +278,55 @@ export class CustomerService {
             [id],
         );
 
-        const newSalesRaw = await this.dataSource.query(
-            `SELECT pns.*,
-                pd.project_id,
-                pd.source, pd.subdivision, pd.floor, pd.unit_code, pd.contract_price,
-                p.project_name, pd.source_details
-         FROM project_new_sales pns
-         JOIN project_details pd ON pd.id = pns.project_detail_id
-         JOIN projects p ON p.id = pd.project_id
-         WHERE pns.customerId = ?
-         ${sourceDetail ? 'AND pd.source_details = ?' : ''}`,
-            sourceDetail ? [id, sourceDetail] : [id],
+        const condition = sourceDetail ? `AND pd.source_details = ?` : '';
+
+        const params = sourceDetail ? [id, sourceDetail] : [id];
+
+        const newSales = await this.dataSource.query(
+            `
+        SELECT 
+            pd.project_id,
+            p.project_name,
+            pd.source_details,
+            COUNT(DISTINCT pd.unit_code) AS total_units
+        FROM project_new_sales pns
+        JOIN project_details pd ON pd.id = pns.project_detail_id
+        JOIN projects p ON p.id = pd.project_id
+        WHERE pns.customerId = ?
+        ${condition}
+        GROUP BY pd.project_id, p.project_name, pd.source_details
+        ORDER BY total_units DESC
+        `,
+            params,
         );
 
-        const transfersRaw = await this.dataSource.query(
-            `SELECT pt.*,
-                pd.project_id,
-                pd.source, pd.subdivision, pd.floor, pd.unit_code, pd.contract_price,
-                p.project_name, pd.source_details
-         FROM project_transfers pt
-         JOIN project_details pd ON pd.id = pt.project_detail_id
-         JOIN projects p ON p.id = pd.project_id
-         WHERE pt.customerId = ?
-         ${sourceDetail ? 'AND pd.source_details = ?' : ''}`,
-            sourceDetail ? [id, sourceDetail] : [id],
+        const transfers = await this.dataSource.query(
+            `
+        SELECT 
+            pd.project_id,
+            p.project_name,
+            pd.source_details,
+            COUNT(DISTINCT pd.unit_code) AS total_units
+        FROM project_transfers pt
+        JOIN project_details pd ON pd.id = pt.project_detail_id
+        JOIN projects p ON p.id = pd.project_id
+        WHERE pt.customerId = ?
+        ${condition}
+        GROUP BY pd.project_id, p.project_name, pd.source_details
+        ORDER BY total_units DESC
+        `,
+            params,
         );
-
-        const dedupeByProjectAndUnit = (rows: any[]) => {
-            const map = new Map<string, any>();
-            for (const r of rows) {
-                if (!r.project_id || !r.unit_code) continue;
-                const key = `${r.project_id}__${r.unit_code}`;
-                if (!map.has(key)) map.set(key, r);
-            }
-            return Array.from(map.values());
-        };
-
-        const newSales = dedupeByProjectAndUnit(newSalesRaw ?? []);
-        const transfers = dedupeByProjectAndUnit(transfersRaw ?? []);
 
         return {
             ...customer,
             relatives: relatives ?? [],
             projects: {
-                new_sales: newSales,
-                transfers: transfers,
+                new_sales: newSales ?? [],
+                transfers: transfers ?? [],
             },
         };
     }
-
 
 
     async getProjectNamesBySource(source: string): Promise<string[]> {
@@ -205,5 +359,43 @@ export class CustomerService {
         return rows.map(r => r.subdivision)
     }
 
+    async getCustomerProjectUnits(customerId: string, projectId: string) {
+
+        const rows = await this.dataSource.query(
+            `
+        SELECT DISTINCT
+            pd.id as project_detail_id,
+            pd.project_id,
+            p.project_name,
+            pd.unit_code,
+            pd.subdivision,
+            pd.floor,
+            pd.source,
+            pd.source_details,
+            pd.contract_price
+        FROM project_details pd
+        JOIN projects p ON p.id = pd.project_id
+
+        LEFT JOIN project_new_sales pns 
+            ON pns.project_detail_id = pd.id 
+            AND pns.customerId = ?
+
+        LEFT JOIN project_transfers pt 
+            ON pt.project_detail_id = pd.id 
+            AND pt.customerId = ?
+
+        WHERE pd.project_id = ?
+        AND (
+            pns.customerId IS NOT NULL
+            OR pt.customerId IS NOT NULL
+        )
+
+        ORDER BY pd.subdivision, pd.floor, pd.unit_code
+        `,
+            [customerId, customerId, projectId],
+        );
+
+        return rows ?? [];
+    }
 
 }
