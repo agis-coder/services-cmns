@@ -1,9 +1,10 @@
-import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, OneToMany, } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn, OneToMany, Index, } from 'typeorm';
 import { Project } from './project.entity';
 import { ProjectTransfer } from './project-transfer.entity';
 import { ProjectNewSale } from './project-new-sale.entity';
 
 @Entity('project_details')
+@Index(['project'])
 export class ProjectDetail {
     @PrimaryGeneratedColumn('uuid')
     id: string;

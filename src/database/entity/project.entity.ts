@@ -1,8 +1,9 @@
 import { ProjectCategory } from '../../common/enums/project-category';
-import { Entity, Column, PrimaryGeneratedColumn, OneToMany, } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany, Index, } from 'typeorm';
 import { ProjectDetail } from './project-detail.entity';
 
 @Entity('projects')
+@Index(['project_name', 'investor'])
 export class Project {
     @PrimaryGeneratedColumn('uuid')
     id: string;
