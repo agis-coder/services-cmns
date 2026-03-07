@@ -8,19 +8,27 @@ export class CustomerController {
     constructor(private readonly customerService: CustomerService) { }
 
     @Get()
+    @ApiQuery({ name: 'page', required: false })
+    @ApiQuery({ name: 'pageSize', required: false })
+    @ApiQuery({ name: 'search', required: false })
+    @ApiQuery({ name: 'source', required: false })
+    @ApiQuery({ name: 'projectId', required: false })
+    @ApiQuery({ name: 'country', required: false })
+    @ApiQuery({ name: 'birthday', required: false })
+    @ApiQuery({ name: 'sortByPurchase', required: false })
     async getAll(
-        @Query('page') page = 1,
-        @Query('pageSize') pageSize = 30,
-        @Query('search') search?: string,
-        @Query('source') source?: string,
-        @Query('projectId') projectId?: string,
-        @Query('country') country?: 'vn' | 'nn',
-        @Query('birthday') birthday?: 'today' | 'tomorrow',
-        @Query('sortByPurchase') sortByPurchase?: 'most' | 'least',
+        @Query('page') page?: any,
+        @Query('pageSize') pageSize?: any,
+        @Query('search') search?: any,
+        @Query('source') source?: any,
+        @Query('projectId') projectId?: any,
+        @Query('country') country?: any,
+        @Query('birthday') birthday?: any,
+        @Query('sortByPurchase') sortByPurchase?: any,
     ) {
         return this.customerService.findAllWithProjects(
-            Number(page),
-            Number(pageSize),
+            Number(page) || 1,
+            Number(pageSize) || 30,
             search,
             source,
             projectId,
