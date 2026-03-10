@@ -1,4 +1,4 @@
-import { Controller, Get, Query, Param, NotFoundException, ParseUUIDPipe } from '@nestjs/common';
+import { Controller, Get, Query, Param, NotFoundException, ParseUUIDPipe, Patch, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiParam, ApiResponse, ApiOkResponse } from '@nestjs/swagger';
 import { CustomerService } from './customer.service';
 
@@ -64,5 +64,18 @@ export class CustomerController {
         @Param('projectId') projectId: string,
     ) {
         return this.customerService.getCustomerProjectUnits(customerId, projectId);
+    }
+
+    @Patch(":id")
+    @ApiParam({ name: "id", type: String })
+    async updateCustomer(
+        @Param("id") id: string,
+        @Body() body: any
+    ) {
+
+        console.log("UPDATE CUSTOMER:", id)
+        console.log("BODY:", body)
+
+        return this.customerService.updateCustomer(id, body);
     }
 }

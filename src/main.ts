@@ -30,10 +30,12 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
 
-
   app.enableCors({
     origin: [
-      'http://localhost:3000', 'http://192.168.1.156:3000', 'http://localhost:3001'
+      'http://localhost:3000',
+      'http://192.168.1.156:3000',
+      'http://localhost:3001',
+      'http://192.168.1.112:3000' // thêm dòng này
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,

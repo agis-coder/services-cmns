@@ -49,6 +49,153 @@ export class CustomerService {
         return { message: 'Customer deleted successfully' };
     }
 
+    // async findAllWithProjects(page = 1, pageSize = 30, search?: string, sourceDetail?: string, projectId?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow', sortByPurchase?: 'most' | 'least') {
+    //     const cacheKey = this.cacheService.buildKey('customer_list', { page, pageSize, search, sourceDetail, projectId, country, birthday, sortByPurchase, });
+    //     return this.cacheService.wrap(cacheKey, async () => {
+    //         const normalizedSearch = normalizeSearch(search || '');
+    //         const qb = this.customerRepo.createQueryBuilder('c').leftJoin(
+    //             `(SELECT customerId,
+    //                      COUNT(DISTINCT project_detail_id) AS project_count
+    //               FROM (
+    //                     SELECT customerId, project_detail_id FROM project_new_sales
+    //                     UNION ALL
+    //                     SELECT customerId, project_detail_id FROM project_transfers
+    //               ) t
+    //               GROUP BY customerId)`,
+    //             'pc',
+    //             'pc.customerId = c.id'
+    //         )
+    //             .select([
+    //                 'c.id AS id',
+    //                 'c.customer_name AS customer_name',
+    //                 'c.phone_number AS phone_number',
+    //                 'c.nationality AS nationality',
+    //                 'c.address AS address',
+    //                 'IFNULL(pc.project_count,0) AS project_count'
+    //             ]);
+    //         if (country === 'vn') {
+    //             qb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
+    //         }
+
+    //         if (country === 'nn') {
+    //             qb.andWhere('(c.nationality IS NULL OR c.nationality NOT LIKE :vn)', {
+    //                 vn: '%vn%',
+    //             });
+    //         }
+
+    //         if (normalizedSearch) {
+    //             const like = `%${normalizedSearch}%`;
+    //             qb.andWhere(
+    //                 `(c.customer_name LIKE :like
+    //               OR c.phone_number LIKE :like
+    //               OR c.address LIKE :like)`,
+    //                 { like }
+    //             );
+    //         }
+
+    //         if (birthday === 'today') {
+    //             qb.andWhere(`
+    //             c.date_of_birth IS NOT NULL
+    //             AND DAY(c.date_of_birth) = DAY(CURDATE())
+    //             AND MONTH(c.date_of_birth) = MONTH(CURDATE())
+    //         `);
+    //         }
+
+    //         if (birthday === 'tomorrow') {
+    //             qb.andWhere(`
+    //             c.date_of_birth IS NOT NULL
+    //             AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+    //             AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+    //         `);
+    //         }
+
+    //         if (projectId) {
+
+    //             qb.andWhere(`
+    //             EXISTS (
+    //                 SELECT 1
+    //                 FROM project_details pd
+    //                 LEFT JOIN project_new_sales pns
+    //                     ON pns.project_detail_id = pd.id
+    //                 LEFT JOIN project_transfers pt
+    //                     ON pt.project_detail_id = pd.id
+    //                 WHERE pd.project_id = :projectId
+    //                 AND (pns.customerId = c.id OR pt.customerId = c.id)
+    //             )
+    //         `, { projectId });
+
+    //         }
+
+    //         // sort
+    //         if (sortByPurchase === 'most') {
+
+    //             qb.orderBy('project_count', 'DESC');
+
+    //         } else if (sortByPurchase === 'least') {
+
+    //             qb.orderBy('project_count', 'ASC');
+
+    //         } else {
+
+    //             qb.orderBy('c.customer_name', 'ASC');
+
+    //         }
+
+    //         qb.offset((page - 1) * pageSize).limit(pageSize);
+    //         const dataRaw = await qb.getRawMany();
+    //         const totalQb = this.customerRepo.createQueryBuilder('c').select('COUNT(DISTINCT c.id)', 'total');
+
+    //         if (country === 'vn') {
+    //             totalQb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
+    //         }
+
+    //         if (country === 'nn') {
+    //             totalQb.andWhere('(c.nationality IS NULL OR c.nationality NOT LIKE :vn)', { vn: '%vn%', });
+    //         }
+    //         if (normalizedSearch) {
+    //             const like = `%${normalizedSearch}%`;
+    //             totalQb.andWhere(
+    //                 `(c.customer_name LIKE :like
+    //               OR c.phone_number LIKE :like
+    //               OR c.address LIKE :like)`,
+    //                 { like }
+    //             );
+    //         }
+
+    //         if (projectId) {
+    //             totalQb.andWhere(`
+    //             EXISTS (
+    //                 SELECT 1
+    //                 FROM project_details pd
+    //                 LEFT JOIN project_new_sales pns
+    //                     ON pns.project_detail_id = pd.id
+    //                 LEFT JOIN project_transfers pt
+    //                     ON pt.project_detail_id = pd.id
+    //                 WHERE pd.project_id = :projectId
+    //                 AND (pns.customerId = c.id OR pt.customerId = c.id)
+    //             )
+    //         `, { projectId });
+
+    //         }
+
+    //         const totalRaw = await totalQb.getRawOne();
+    //         const total = Number(totalRaw?.total ?? 0);
+
+
+    //         const data = dataRaw.map((c: any) => ({
+    //             id: c.id,
+    //             customer_name: c.customer_name || 'Chưa có',
+    //             phone_number: c.phone_number || 'Chưa có',
+    //             nationality: c.nationality || 'Chưa có',
+    //             address: c.address || 'Chưa có',
+    //             project_count: Number(c.project_count ?? 0),
+
+    //         }));
+    //         return { data, total, page, pageSize, totalPages: Math.ceil(total / pageSize), };
+
+    //     }, 300);
+    // }
+
     async findAllWithProjects(
         page = 1,
         pageSize = 30,
@@ -57,9 +204,8 @@ export class CustomerService {
         projectId?: string,
         country?: 'vn' | 'nn',
         birthday?: 'today' | 'tomorrow',
-        sortByPurchase?: 'most' | 'least'
+        sortByPurchase?: 'most' | 'least',
     ) {
-
         const cacheKey = this.cacheService.buildKey('customer_list', {
             page,
             pageSize,
@@ -72,36 +218,46 @@ export class CustomerService {
         });
 
         return this.cacheService.wrap(cacheKey, async () => {
-
             const normalizedSearch = normalizeSearch(search || '');
 
             const qb = this.customerRepo
                 .createQueryBuilder('c')
-
-                // project_count optimized
                 .leftJoin(
                     `(SELECT customerId,
-                         COUNT(DISTINCT project_detail_id) AS project_count
-                  FROM (
-                        SELECT customerId, project_detail_id FROM project_new_sales
-                        UNION ALL
-                        SELECT customerId, project_detail_id FROM project_transfers
-                  ) t
-                  GROUP BY customerId)`,
+                COUNT(DISTINCT project_detail_id) AS project_count
+         FROM (
+           SELECT customerId, project_detail_id FROM project_new_sales
+           UNION ALL
+           SELECT customerId, project_detail_id FROM project_transfers
+         ) t
+         GROUP BY customerId)`,
                     'pc',
-                    'pc.customerId = c.id'
+                    'pc.customerId = c.id',
                 )
-
                 .select([
                     'c.id AS id',
                     'c.customer_name AS customer_name',
+                    'c.email AS email',
                     'c.phone_number AS phone_number',
                     'c.nationality AS nationality',
                     'c.address AS address',
-                    'IFNULL(pc.project_count,0) AS project_count'
+                    'IFNULL(pc.project_count,0) AS project_count',
                 ]);
 
-            // country filter
+            /* ---------------- SEARCH ---------------- */
+
+            if (normalizedSearch) {
+                const like = `%${normalizedSearch}%`;
+                qb.andWhere(
+                    `(c.customer_name LIKE :like
+          OR c.phone_number LIKE :like
+          OR c.address LIKE :like)`,
+                    { like },
+                );
+            }
+
+            /* ---------------- COUNTRY ---------------- */
+
             if (country === 'vn') {
                 qb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
             }
@@ -112,78 +268,82 @@ export class CustomerService {
                 });
             }
 
-            // search
-            if (normalizedSearch) {
+            /* ---------------- BIRTHDAY ---------------- */
 
-                const like = `%${normalizedSearch}%`;
-
-                qb.andWhere(
-                    `(c.customer_name LIKE :like
-                  OR c.phone_number LIKE :like
-                  OR c.address LIKE :like)`,
-                    { like }
-                );
-            }
-
-            // birthday
             if (birthday === 'today') {
                 qb.andWhere(`
-                c.date_of_birth IS NOT NULL
-                AND DAY(c.date_of_birth) = DAY(CURDATE())
-                AND MONTH(c.date_of_birth) = MONTH(CURDATE())
-            `);
+        c.date_of_birth IS NOT NULL
+        AND DAY(c.date_of_birth) = DAY(CURDATE())
+        AND MONTH(c.date_of_birth) = MONTH(CURDATE())
+      `);
             }
 
             if (birthday === 'tomorrow') {
                 qb.andWhere(`
-                c.date_of_birth IS NOT NULL
-                AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
-                AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
-            `);
+        c.date_of_birth IS NOT NULL
+        AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+        AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+      `);
             }
 
-            // project filter
+            /* ---------------- PROJECT FILTER ---------------- */
+
             if (projectId) {
-
-                qb.andWhere(`
-                EXISTS (
-                    SELECT 1
-                    FROM project_details pd
-                    LEFT JOIN project_new_sales pns
-                        ON pns.project_detail_id = pd.id
-                    LEFT JOIN project_transfers pt
-                        ON pt.project_detail_id = pd.id
-                    WHERE pd.project_id = :projectId
-                    AND (pns.customerId = c.id OR pt.customerId = c.id)
-                )
-            `, { projectId });
-
+                qb.andWhere(
+                    `
+        (
+          EXISTS (
+            SELECT 1
+            FROM project_new_sales pns
+            JOIN project_details pd ON pd.id = pns.project_detail_id
+            WHERE pd.project_id = :projectId
+            AND pns.customerId = c.id
+          )
+          OR
+          EXISTS (
+            SELECT 1
+            FROM project_transfers pt
+            JOIN project_details pd2 ON pd2.id = pt.project_detail_id
+            WHERE pd2.project_id = :projectId
+            AND pt.customerId = c.id
+          )
+        )
+        `,
+                    { projectId },
+                );
             }
 
-            // sort
+            /* ---------------- SORT ---------------- */
+
             if (sortByPurchase === 'most') {
-
                 qb.orderBy('project_count', 'DESC');
-
             } else if (sortByPurchase === 'least') {
-
                 qb.orderBy('project_count', 'ASC');
-
             } else {
-
                 qb.orderBy('c.customer_name', 'ASC');
-
             }
 
-            // pagination
+            /* ---------------- PAGINATION ---------------- */
+
             qb.offset((page - 1) * pageSize).limit(pageSize);
 
             const dataRaw = await qb.getRawMany();
 
+            /* ---------------- TOTAL QUERY ---------------- */
 
-            // TOTAL COUNT optimized
-            const totalQb = this.customerRepo.createQueryBuilder('c')
+            const totalQb = this.customerRepo
+                .createQueryBuilder('c')
                 .select('COUNT(DISTINCT c.id)', 'total');
+
+            if (normalizedSearch) {
+                const like = `%${normalizedSearch}%`;
+                totalQb.andWhere(
+                    `(c.customer_name LIKE :like
+          OR c.phone_number LIKE :like
+          OR c.address LIKE :like)`,
+                    { like },
+                );
+            }
 
             if (country === 'vn') {
                 totalQb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
@@ -195,50 +355,61 @@ export class CustomerService {
                 });
             }
 
-            if (normalizedSearch) {
+            if (birthday === 'today') {
+                totalQb.andWhere(`
+        c.date_of_birth IS NOT NULL
+        AND DAY(c.date_of_birth) = DAY(CURDATE())
+        AND MONTH(c.date_of_birth) = MONTH(CURDATE())
+      `);
+            }
 
-                const like = `%${normalizedSearch}%`;
-
-                totalQb.andWhere(
-                    `(c.customer_name LIKE :like
-                  OR c.phone_number LIKE :like
-                  OR c.address LIKE :like)`,
-                    { like }
-                );
+            if (birthday === 'tomorrow') {
+                totalQb.andWhere(`
+        c.date_of_birth IS NOT NULL
+        AND DAY(c.date_of_birth) = DAY(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+        AND MONTH(c.date_of_birth) = MONTH(DATE_ADD(CURDATE(), INTERVAL 1 DAY))
+      `);
             }
 
             if (projectId) {
-
-                totalQb.andWhere(`
-                EXISTS (
-                    SELECT 1
-                    FROM project_details pd
-                    LEFT JOIN project_new_sales pns
-                        ON pns.project_detail_id = pd.id
-                    LEFT JOIN project_transfers pt
-                        ON pt.project_detail_id = pd.id
-                    WHERE pd.project_id = :projectId
-                    AND (pns.customerId = c.id OR pt.customerId = c.id)
-                )
-            `, { projectId });
-
+                totalQb.andWhere(
+                    `
+        (
+          EXISTS (
+            SELECT 1
+            FROM project_new_sales pns
+            JOIN project_details pd ON pd.id = pns.project_detail_id
+            WHERE pd.project_id = :projectId
+            AND pns.customerId = c.id
+          )
+          OR
+          EXISTS (
+            SELECT 1
+            FROM project_transfers pt
+            JOIN project_details pd2 ON pd2.id = pt.project_detail_id
+            WHERE pd2.project_id = :projectId
+            AND pt.customerId = c.id
+          )
+        )
+        `,
+                    { projectId },
+                );
             }
 
             const totalRaw = await totalQb.getRawOne();
             const total = Number(totalRaw?.total ?? 0);
 
+            /* ---------------- FORMAT DATA ---------------- */
 
             const data = dataRaw.map((c: any) => ({
-
                 id: c.id,
                 customer_name: c.customer_name || 'Chưa có',
+                email: c.email || 'Chưa có',
                 phone_number: c.phone_number || 'Chưa có',
                 nationality: c.nationality || 'Chưa có',
                 address: c.address || 'Chưa có',
                 project_count: Number(c.project_count ?? 0),
-
             }));
-
 
             return {
                 data,
@@ -247,8 +418,7 @@ export class CustomerService {
                 pageSize,
                 totalPages: Math.ceil(total / pageSize),
             };
-
-        }, 300); // cache 5 phút
+        }, 300);
     }
 
     async searchCustomersWithProjects(search: string, page = 1, pageSize = 20, sourceDetail?: string, customerName?: string) {
@@ -386,6 +556,7 @@ export class CustomerService {
             pd.project_id,
             p.project_name,
             pd.unit_code,
+            pd.product_type ,
             pd.subdivision,
             pd.floor,
             pd.source,
@@ -416,4 +587,62 @@ export class CustomerService {
         return rows ?? [];
     }
 
+    async updateCustomer(id: string, body: any) {
+
+        const repo = this.dataSource.getRepository(Customer);
+
+        const customer = await repo.findOne({ where: { id } });
+
+        if (!customer) {
+            throw new Error("Customer not found");
+        }
+
+        const allowedFields = [
+            "customer_name",
+            "phone_number",
+            "img_customer",
+            "date_of_birth",
+            "cccd",
+            "email",
+            "gender",
+            "address",
+            "permanent_address",
+            "living_area",
+            "the_product_type",
+            "nationality",
+            "marital_status",
+            "interest",
+            "total_assets",
+            "business_field",
+            "zalo_status",
+            "facebook",
+            "isVip",
+            "level"
+        ];
+
+        const payload: any = {};
+
+        for (const key of allowedFields) {
+            if (body[key] !== undefined) {
+
+                let value = body[key];
+
+                // fix empty string
+                if (value === "") {
+                    value = null;
+                }
+
+                payload[key] = value;
+            }
+        }
+
+        await repo.update(id, payload);
+
+        const updated = await repo.findOne({ where: { id } });
+
+        return {
+            message: "Update customer success",
+            data: updated
+        };
+    }
 }

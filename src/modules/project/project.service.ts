@@ -2,25 +2,21 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { Project } from "../../database/entity/project.entity";
 import { DataSource } from "typeorm";
 import { ProjectCategory } from "../../common/enums/project-category";
-
-interface ProjectTemp {
-    project_id: string;
-    project_name: string;
-    customerSet: Set<string>;
-    emailSet: Set<string>;
-    phoneSet: Set<string>;
-}
+import { ProjectDetail } from "../../database/entity/project-detail.entity";
 
 interface InvestorTemp {
-    investor: string;
-    quantity: number;              // số project
-    totalCustomers: number;
-    totalEmails: Set<string>;
-    totalPhones: Set<string>;
-    customerSet: Set<string>;
-    projectMap: Map<string, ProjectTemp>;
+    investor: string
+    quantity: number
+    projectMap: Map<string, ProjectTemp>
 }
 
+interface ProjectTemp {
+    project_id: string
+    project_name: string
+    customerSet: Set<string>
+    emailSet: Set<string>
+    phoneSet: Set<string>
+}
 // ===== RESPONSE =====
 interface ProjectSummary {
     project_id: string;
@@ -43,39 +39,54 @@ interface InvestorSummary {
 export class ProjectService {
     constructor(private readonly dataSource: DataSource) { }
 
-    async getProjects(page = 1, pageSize = 20, search?: string): Promise<{
-        data: { id: string; project_name: string; investor: string }[];
+    async getProjects(
+        search?: string,
+        category?: ProjectCategory,
+        investor?: string
+    ): Promise<{
         total: number;
-        page: number;
-        pageSize: number;
-        totalPages: number;
+        data: {
+            id: string;
+            project_name: string;
+            investor: string;
+            project_category: ProjectCategory;
+        }[];
     }> {
-        const qb = this.dataSource
-            .getRepository(Project)
-            .createQueryBuilder('p');
 
+        const repo = this.dataSource.getRepository(Project);
+        const qb = repo.createQueryBuilder("p");
+
+        // search theo tên dự án
         if (search) {
-            qb.where('LOWER(p.project_name) LIKE :search', { search: `%${search.toLowerCase()}%` });
+            qb.andWhere("LOWER(p.project_name) LIKE :search", {
+                search: `%${search.toLowerCase()}%`,
+            });
         }
 
-        qb.orderBy('p.project_name', 'ASC')
-            .skip((page - 1) * pageSize)
-            .take(pageSize);
+        // filter category
+        if (category) {
+            qb.andWhere("p.project_category = :category", { category });
+        }
 
-        const [projects, total] = await qb.getManyAndCount();
+        // filter investor
+        if (investor) {
+            qb.andWhere("LOWER(p.investor) LIKE :investor", {
+                investor: `%${investor.toLowerCase()}%`,
+            });
+        }
 
-        const formatted = projects.map(p => ({
-            id: p.id,
-            project_name: p.project_name,
-            investor: p.investor,
-        }));
+        const projects = await qb
+            .orderBy("p.project_name", "ASC")
+            .getMany();
 
         return {
-            data: formatted,
-            total,
-            page,
-            pageSize,
-            totalPages: Math.ceil(total / pageSize),
+            total: projects.length,
+            data: projects.map(p => ({
+                id: p.id,
+                project_name: p.project_name,
+                investor: p.investor,
+                project_category: p.project_category,
+            })),
         };
     }
 
@@ -91,12 +102,33 @@ export class ProjectService {
         return repo.save(project);
     }
 
-    async updateProject(id: string, payload: Partial<Project>) {
+    async updateProject(id: string, body: any) {
+
         const repo = this.dataSource.getRepository(Project);
-        const project = await repo.findOne({ where: { id } });
-        if (!project) throw new NotFoundException("Project not found");
-        Object.assign(project, payload);
-        return repo.save(project);
+
+        const project = await repo.findOne({
+            where: { id }
+        });
+
+        if (!project) {
+            throw new Error("Project not found");
+        }
+
+        // chỉ giữ field hợp lệ
+        const payload: Partial<Project> = {
+            project_name: body.project_name,
+            investor: body.investor,
+            project_category: body.project_category
+        };
+
+        await repo.update(id, payload);
+
+        const updated = await repo.findOne({ where: { id } });
+
+        return {
+            message: "Update success",
+            data: updated
+        };
     }
 
     async deleteProject(id: string) {
@@ -158,10 +190,6 @@ export class ProjectService {
                 investorMap.set(row.investor, {
                     investor: row.investor,
                     quantity: 0,
-                    totalCustomers: 0,
-                    totalEmails: new Set<string>(),
-                    totalPhones: new Set<string>(),
-                    customerSet: new Set<string>(),
                     projectMap: new Map<string, ProjectTemp>(),
                 });
             }
@@ -186,13 +214,16 @@ export class ProjectService {
                 projectItem.customerSet.add(row.customer_id);
             }
 
-            this.extractEmails(row.email).forEach(email => {
-                projectItem.emailSet.add(email);
-            });
+            const emails = this.extractEmails(row.email);
+            const phones = this.extractPhones(row.phone);
 
-            this.extractPhones(row.phone).forEach(phone => {
+            for (const email of emails) {
+                projectItem.emailSet.add(email);
+            }
+
+            for (const phone of phones) {
                 projectItem.phoneSet.add(phone);
-            });
+            }
         }
 
         const result: InvestorSummary[] = [];
@@ -200,19 +231,27 @@ export class ProjectService {
         for (const investorItem of investorMap.values()) {
 
             const projects: ProjectSummary[] = [];
+
             let totalCustomers = 0;
+            let totalEmails = 0;
+            let totalPhones = 0;
 
             for (const projectItem of investorItem.projectMap.values()) {
 
                 const customerCount = projectItem.customerSet.size;
+                const emailCount = projectItem.emailSet.size;
+                const phoneCount = projectItem.phoneSet.size;
+
                 totalCustomers += customerCount;
+                totalEmails += emailCount;
+                totalPhones += phoneCount;
 
                 projects.push({
                     project_id: projectItem.project_id,
                     project_name: projectItem.project_name,
                     quantity: customerCount,
-                    email_quantity: projectItem.emailSet.size,
-                    phone_quantity: projectItem.phoneSet.size,
+                    email_quantity: emailCount,
+                    phone_quantity: phoneCount,
                 });
             }
 
@@ -220,8 +259,8 @@ export class ProjectService {
                 investor: investorItem.investor,
                 quantity: investorItem.quantity,
                 totalCustomers: totalCustomers,
-                totalEmails: 0,
-                totalPhones: 0,
+                totalEmails: totalEmails,
+                totalPhones: totalPhones,
                 list: projects,
             });
         }
@@ -239,6 +278,7 @@ export class ProjectService {
             .select([
                 'c.id AS customer_id',
                 'c.customer_name AS customer_name',
+                'c.email AS email',
                 'c.phone_number AS phone',
                 'c.address AS address',
                 'COUNT(ns.id) AS total_units'
@@ -257,6 +297,7 @@ export class ProjectService {
         return rows.map(r => ({
             customer_id: r.customer_id,
             customer_name: r.customer_name,
+            email: r.email,
             phone: r.phone,
             address: r.address,
             total_units: Number(r.total_units),
@@ -264,4 +305,59 @@ export class ProjectService {
 
     }
 
+    async updateProjectDetail(id: string, body: any) {
+        const repo = this.dataSource.getRepository(ProjectDetail);
+
+        const detail = await repo.findOne({ where: { id } });
+        if (!detail) throw new Error("Project detail not found");
+
+        const allowedFields = [
+            "unit_code",
+            "product_type",
+            "subdivision",
+            "floor",
+            "land_area",
+            "usable_area",
+            "door_direction",
+            "view",
+            "contract_price",
+            "day_trading",
+            "source",
+            "source_details",
+            "is_active"
+        ];
+
+        const payload: any = {};
+
+        for (const key of allowedFields) {
+            if (!(key in body)) continue;
+
+            let val = body[key];
+
+            // Chuẩn hóa string
+            if (typeof val === "string") val = val.trim();
+
+            // Nếu rỗng/null/undefined → GIỮ GIÁ TRỊ CŨ (không gửi xuống DB)
+            if (val === "" || val === null || val === undefined) {
+                payload[key] = (detail as any)[key];
+                continue;
+            }
+
+            // Convert số nếu cần
+            if (["land_area", "usable_area", "contract_price"].includes(key)) {
+                const num = Number(val);
+                if (!Number.isNaN(num)) val = num;
+                else val = (detail as any)[key];
+            }
+
+            payload[key] = val;
+        }
+
+        await repo.update(id, payload);
+
+        return {
+            message: "Update success",
+            data: { ...detail, ...payload }
+        };
+    }
 }

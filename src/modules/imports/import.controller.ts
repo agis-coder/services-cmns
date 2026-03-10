@@ -77,6 +77,7 @@ export class ImportController {
         },
     })
     deleteImport(@Param('id') id: string) {
+        console.log('id:', id)
         return this.importService.deleteImportFile(id);
     }
 }

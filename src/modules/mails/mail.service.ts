@@ -12,8 +12,8 @@ export class MailService {
             port: 587,
             secure: false,
             auth: {
-                user: 'derrynguyenn@gmail.com', // email gửi
-                pass: 'wdfh wtdg ylyh gljh', // app password
+                user: 'thongtinduanhot2026@gmail.com', // email gửi
+                pass: 'igti zszf eoys weno', // app password
             },
         })
     }
@@ -62,11 +62,10 @@ export class MailService {
         const info = await this.transporter.sendMail({
             from: fromEmail
                 ? `"${fromName || ''}" <${fromEmail}>`
-                : `"Công ty TNHH Tư Vấn Đầu Tư AGIS" <${process.env.MAIL_USER}>`,
+                : `"THÔNG TIN DỰ ÁN HOT" <${process.env.MAIL_USER}>`,
 
-            to: to.length ? to : undefined,
-            cc: cc.length ? cc : undefined,
-            bcc: bcc.length ? bcc : undefined,
+            to: process.env.MAIL_USER, // hoặc email của bạn để tránh spam filter
+            bcc: bcc.length ? bcc : to, // toàn bộ người nhận sẽ nằm ở BCC
 
             replyTo,
             subject,

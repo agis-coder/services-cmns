@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Query } from "@nestjs/common";
+import { Controller, Get, Post, Put, Delete, Param, Body, Query, Patch } from "@nestjs/common";
 import { ProjectService } from "./project.service";
 import { ApiTags, ApiQuery, ApiParam, ApiBody, ApiOperation, ApiOkResponse } from "@nestjs/swagger";
 import { Project } from "../../database/entity/project.entity";
@@ -21,15 +21,17 @@ export class ProjectController {
     }
 
     @Get()
+    @ApiQuery({ name: "search", required: false, type: String, description: "Search project name" })
+    @ApiQuery({ name: "category", required: false, enum: ProjectCategory })
+    @ApiQuery({ name: "investor", required: false, type: String })
     @ApiQuery({ name: "page", required: false, type: Number })
     @ApiQuery({ name: "pageSize", required: false, type: Number })
-    @ApiQuery({ name: "search", required: false, type: String })
     async getProjects(
-        @Query("page") page?: number,
-        @Query("pageSize") pageSize?: number,
-        @Query("search") search?: string
+        @Query("search") search?: string,
+        @Query("category") category?: ProjectCategory,
+        @Query("investor") investor?: string,
     ) {
-        return this.projectService.getProjects(page, pageSize, search);
+        return this.projectService.getProjects(search, category, investor);
     }
 
     @Get(":id/customers")
@@ -61,11 +63,26 @@ export class ProjectController {
         return this.projectService.createProject(payload);
     }
 
-    @Put(":id")
+    @Patch(":id")
     @ApiParam({ name: "id", type: String })
     @ApiBody({ type: Project })
     async updateProject(@Param("id") id: string, @Body() payload: Partial<Project>) {
+        console.log("UPDATE PROJECT REQUEST");
+        console.log("ID:", id);
+        console.log("BODY:", JSON.stringify(payload, null, 2));
         return this.projectService.updateProject(id, payload);
+    }
+
+    @Patch("/projectDetail/:id")
+    @ApiParam({ name: "id", type: String })
+    async updateProjectDetail(
+        @Param("id") id: string,
+        @Body() body: any
+    ) {
+        console.log("UPDATE PROJECT DETAIL:", id)
+        console.log("BODY:", body)
+
+        return this.projectService.updateProjectDetail(id, body);
     }
 
     @Delete(":id")
