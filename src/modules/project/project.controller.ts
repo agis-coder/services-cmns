@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Query, Patch } from "@nestjs/common";
 import { ProjectService } from "./project.service";
 import { ApiTags, ApiQuery, ApiParam, ApiBody, ApiOperation, ApiOkResponse } from "@nestjs/swagger";
-import { Project } from "../../database/entity/project.entity";
 import { ProjectCategory } from "../../common/enums/project-category";
+import { Project } from "../../entities/project.entity";
 
 @ApiTags("Projects")
 @Controller("projects")

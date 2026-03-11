@@ -1,20 +1,8 @@
-// src/database/entity/import-file.entity.ts
-import {
-    Entity,
-    Column,
-    PrimaryGeneratedColumn,
-    OneToMany,
-    CreateDateColumn,
-    Index,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, OneToMany, CreateDateColumn, Index, } from 'typeorm';
 import { Customer } from './customer.entity';
 import { ProjectNewSale } from './project-new-sale.entity';
 import { ProjectTransfer } from './project-transfer.entity';
-
-export enum ImportStatus {
-    IMPORTED = 'imported',
-    TEMP_DELETED = 'temp_deleted',
-}
+import { ImportStatus } from '../common/enums/import';
 
 @Entity('import_files')
 export class ImportFile {
@@ -25,11 +13,7 @@ export class ImportFile {
     @Index()
     file_name: string;
 
-    @Column({
-        type: 'enum',
-        enum: ImportStatus,
-        default: ImportStatus.IMPORTED,
-    })
+    @Column({ type: 'enum', enum: ImportStatus, default: ImportStatus.IMPORTED })
     status: ImportStatus;
 
     @CreateDateColumn()

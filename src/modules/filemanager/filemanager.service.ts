@@ -1,8 +1,8 @@
-// src/modules/import-file/import-file.service.ts
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ImportStatus } from '../../common/enums/import';
+import { ImportFile } from '../../entities/import-file.entity';
 import { Repository } from 'typeorm';
-import { ImportFile, ImportStatus } from '../../database/entity/import-file.entity';
 
 @Injectable()
 export class FileManagerService {
@@ -11,11 +11,7 @@ export class FileManagerService {
         private readonly importFileRepo: Repository<ImportFile>,
     ) { }
 
-    async getList(params: {
-        page?: number;
-        limit?: number;
-        status?: ImportStatus;
-    }) {
+    async getList(params: { page?: number; limit?: number; status?: ImportStatus; }) {
         const page = params.page ?? 1;
         const limit = params.limit ?? 20;
         const skip = (page - 1) * limit;
@@ -34,7 +30,6 @@ export class FileManagerService {
             .orderBy('f.imported_at', 'DESC')
             .skip(skip)
             .take(limit);
-
         if (params.status) {
             qb.andWhere('f.status = :status', { status: params.status });
         }
@@ -47,12 +42,7 @@ export class FileManagerService {
 
         return {
             data,
-            pagination: {
-                total,
-                page,
-                limit,
-                total_page: Math.ceil(total / limit),
-            },
+            pagination: { total, page, limit, total_page: Math.ceil(total / limit) },
         };
     }
 }

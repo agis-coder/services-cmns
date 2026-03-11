@@ -1,8 +1,8 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { Project } from "../../database/entity/project.entity";
 import { DataSource } from "typeorm";
+import { Project } from "../../entities/project.entity";
+import { ProjectDetail } from "../../entities/project-detail.entity";
 import { ProjectCategory } from "../../common/enums/project-category";
-import { ProjectDetail } from "../../database/entity/project-detail.entity";
 
 interface InvestorTemp {
     investor: string
