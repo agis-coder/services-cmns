@@ -9,7 +9,7 @@ export class Project {
     id: string;
     @Column()
     project_name: string;
-    @Column({ type: 'enum', enum: ProjectCategory, default: ProjectCategory.BDS, })
+    @Column({ type: 'enum', enum: ProjectCategory, default: ProjectCategory.BĐS, })
     project_category: ProjectCategory;
     @Column({ nullable: true })
     investor: string;

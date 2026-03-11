@@ -21,6 +21,7 @@ export class CustomerController {
     @ApiQuery({ name: 'hasEmail', required: false, enum: ['yes', 'no', 'all'] })
     async getAll(@Query('page') page?: any, @Query('pageSize') pageSize?: any, @Query('search') search?: any, @Query('source') source?: any, @Query('projectId') projectId?: any, @Query('country') country?: any, @Query('birthday') birthday?: any, @Query('sortByPurchase') sortByPurchase?: any, @Query('hasEmail') hasEmail?: 'yes' | 'no' | 'all',
     ) {
+        console.log('soucre:', source)
         return this.customerService.findAllWithProjects(Number(page) || 1, Number(pageSize) || 30, search, source, projectId, country, birthday, sortByPurchase, hasEmail)
     }
 

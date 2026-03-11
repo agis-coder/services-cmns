@@ -31,8 +31,8 @@ export class CustomerService {
         return await this.customerRepo.save(customer);
     }
 
-    async findAllWithProjects(page = 1, pageSize = 30, search?: string, sourceDetail?: string, projectId?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow', sortByPurchase?: 'most' | 'least', hasEmail?: 'yes' | 'no' | 'all',) {
-        const cacheKey = this.cacheService.buildKey('customer_list', { page, pageSize, search, sourceDetail, projectId, country, birthday, sortByPurchase, hasEmail });
+    async findAllWithProjects(page = 1, pageSize = 30, search?: string, source?: string, projectId?: string, country?: 'vn' | 'nn', birthday?: 'today' | 'tomorrow', sortByPurchase?: 'most' | 'least', hasEmail?: 'yes' | 'no' | 'all',) {
+        const cacheKey = this.cacheService.buildKey('customer_list', { page, pageSize, search, source, projectId, country, birthday, sortByPurchase, hasEmail });
 
         return this.cacheService.wrap(cacheKey, async () => {
             const normalizedSearch = normalizeSearch(search || '');
@@ -66,8 +66,8 @@ export class CustomerService {
                     vn: '%vn%',
                 });
             }
-            if (sourceDetail) {
-                qb.andWhere(`(EXISTS (SELECT 1 FROM project_new_sales pns JOIN project_details pd ON pd.id = pns.project_detail_id WHERE pd.source_details = :sourceDetail AND pns.customerId = c.id) OR EXISTS (SELECT 1 FROM project_transfers pt JOIN project_details pd2 ON pd2.id = pt.project_detail_id WHERE pd2.source_details = :sourceDetail AND pt.customerId = c.id))`, { sourceDetail });
+            if (source) {
+                qb.andWhere(`(EXISTS (SELECT 1 FROM project_new_sales pns JOIN project_details pd ON pd.id = pns.project_detail_id WHERE pd.source = :source AND pns.customerId = c.id) OR EXISTS (SELECT 1 FROM project_transfers pt JOIN project_details pd2 ON pd2.id = pt.project_detail_id WHERE pd2.source = :source AND pt.customerId = c.id))`, { source });
             }
             if (birthday === 'today') qb.andWhere(`c.date_of_birth IS NOT NULL AND DAY(c.date_of_birth) = DAY(CURDATE()) AND MONTH(c.date_of_birth) = MONTH(CURDATE())`);
 
@@ -93,8 +93,8 @@ export class CustomerService {
                 const like = `%${normalizedSearch}%`;
                 totalQb.andWhere(`(c.customer_name LIKE :like OR c.phone_number LIKE :like OR c.address LIKE :like)`, { like });
             }
-            if (sourceDetail) {
-                totalQb.andWhere(`(EXISTS (SELECT 1 FROM project_new_sales pns JOIN project_details pd ON pd.id = pns.project_detail_id WHERE pd.source_details = :sourceDetail AND pns.customerId = c.id) OR EXISTS (SELECT 1 FROM project_transfers pt JOIN project_details pd2 ON pd2.id = pt.project_detail_id WHERE pd2.source_details = :sourceDetail AND pt.customerId = c.id))`, { sourceDetail });
+            if (source) {
+                totalQb.andWhere(`(EXISTS (SELECT 1 FROM project_new_sales pns JOIN project_details pd ON pd.id = pns.project_detail_id WHERE pd.source = :source AND pns.customerId = c.id) OR EXISTS (SELECT 1 FROM project_transfers pt JOIN project_details pd2 ON pd2.id = pt.project_detail_id WHERE pd2.source = :source AND pt.customerId = c.id))`, { source });
             }
             if (country === 'vn') {
                 totalQb.andWhere('c.nationality LIKE :vn', { vn: '%vn%' });
@@ -139,8 +139,8 @@ export class CustomerService {
         }, 300);
     }
 
-    async searchCustomersWithProjects(search: string, page = 1, pageSize = 20, sourceDetail?: string, customerName?: string) {
-        return this.findAllWithProjects(page, pageSize, search, sourceDetail);
+    async searchCustomersWithProjects(search: string, page = 1, pageSize = 20, source?: string, customerName?: string) {
+        return this.findAllWithProjects(page, pageSize, search, source);
     }
 
     async getAllSources() {

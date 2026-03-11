@@ -35,7 +35,8 @@ async function bootstrap() {
       'http://localhost:3000',
       'http://192.168.1.156:3000',
       'http://localhost:3001',
-      'http://192.168.1.112:3000' // thêm dòng này
+      'http://192.168.1.112:3000',
+      'http://192.168.1.41:3000'
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,

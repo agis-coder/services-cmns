@@ -7,6 +7,9 @@ export class IpWhitelistMiddleware implements NestMiddleware {
         '127.0.0.1',
         '::1',
         '192.168.1.156',
+        '192.168.1.41',
+        '192.168.1.112',
+
     ];
 
     use(req: Request, res: Response, next: NextFunction) {
